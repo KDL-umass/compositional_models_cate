@@ -75,7 +75,7 @@ run_env = args.run_env
 if run_env == "local":
     base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
 else:
-    base_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+    base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
 
 main_dir = f"{base_dir}/{domain}"
 csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}"

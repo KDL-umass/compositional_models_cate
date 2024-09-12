@@ -53,7 +53,7 @@ def parse_arguments():
     # split type
     parser.add_argument("--split_type", type=str, default="iid", help="Split type")
     # run environment
-    parser.add_argument("--run_env", type=str, default="local", help="Run environment
+    parser.add_argument("--run_env", type=str, default="local", help="Run environment")
     return parser.parse_args()
 args = parse_arguments()
 # print(args)
@@ -77,7 +77,7 @@ run_env = args.run_env
 if run_env == "local":
     base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
 else:
-    base_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+    base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
 
 
 main_dir = f"{base_dir}/{domain}"
