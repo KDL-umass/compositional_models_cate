@@ -1,0 +1,10 @@
+domains/manufacturing
+domains/maths_evaluation
+domains/query_execution
+domains/simulation_manufacturing
+domains/synthetic_data
+results_analysis/plots_*
+results_analysis/previous*
+experiments/logs
+.DS_Store
+__pycache__
