@@ -39,6 +39,8 @@ parser.add_argument("--output_dim", type=int, default=1, help="Output dimension"
 parser.add_argument("--covariates_shared", type=str, default="False", help="Covariates shared")
 # model_class
 parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
+# run_env
+parser.add_argument("--run_env", type=str, default="local", help="Run environment")
 
 # parse arguments
 args = parser.parse_args()
@@ -68,7 +70,14 @@ else:
 
 domain = "synthetic_data"
 # setup directories
-main_dir = f"/Users/ppruthi/research/novelty_accommodation/compositional_models_cate/domains/{domain}"
+run_env = args.run_env
+
+if run_env == "local":
+    base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+else:
+    base_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+
+main_dir = f"{base_dir}/{domain}"
 csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}"
 obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}"
 

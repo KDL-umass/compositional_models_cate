@@ -19,79 +19,79 @@ num_modules_list_10=(1 10 20 30 40 50 60 70 80 90 100)
 
 
 # test command 
-# python test_base_hypothesis_1.py --num_modules 10 --num_feature_dimensions 6 --module_function_type "mlp" --data_dist "uniform" --covariates_shared True --underlying_model_class "MLP"
+python test_base_hypothesis_1.py --num_modules 10 --num_feature_dimensions 6 --module_function_type "mlp" --data_dist "uniform" --covariates_shared True --underlying_model_class "MLP"
 
-# Vary num_modules from 1 10 20 for shared covariates
-for num_modules in ${num_modules_list_10[@]};
-do
+# # Vary num_modules from 1 10 20 for shared covariates
+# for num_modules in ${num_modules_list_10[@]};
+# do
 
-    # Vary module_function_type
-    for module_function_type in ${module_function_types[@]}; 
-    do
-        # Vary data_dist
-        for data_dist in ${data_dists[@]}; 
-        do
-            $base_cmd --num_modules $num_modules --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --num_feature_dimensions 10 --underlying_model_class "MLP"
-        done
-    done
-done
+#     # Vary module_function_type
+#     for module_function_type in ${module_function_types[@]}; 
+#     do
+#         # Vary data_dist
+#         for data_dist in ${data_dists[@]}; 
+#         do
+#             $base_cmd --num_modules $num_modules --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --num_feature_dimensions 10 --underlying_model_class "MLP"
+#         done
+#     done
+# done
 
-# Vary num_modules from 2 to 10 for non-shared covariates
-for num_modules in ${num_modules_list[@]};
-do
+# # Vary num_modules from 2 to 10 for non-shared covariates
+# for num_modules in ${num_modules_list[@]};
+# do
 
-    # Vary module_function_type
-    for module_function_type in ${module_function_types[@]}; 
-    do
-        # Vary data_dist
-        for data_dist in ${data_dists[@]}; 
-        do
-            $base_cmd --num_modules $num_modules --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --num_feature_dimensions 10 --underlying_model_class "MLP"
-        done
-    done
-done
+#     # Vary module_function_type
+#     for module_function_type in ${module_function_types[@]}; 
+#     do
+#         # Vary data_dist
+#         for data_dist in ${data_dists[@]}; 
+#         do
+#             $base_cmd --num_modules $num_modules --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --num_feature_dimensions 10 --underlying_model_class "MLP"
+#         done
+#     done
+# done
 
-# # Vary num_features from 2 to 100 by 10 for shared covariates
-for feature_dim in ${feature_dim_list_10[@]};
-do
+# # # Vary num_features from 2 to 100 by 10 for shared covariates
+# for feature_dim in ${feature_dim_list_10[@]};
+# do
 
-    # Vary module_function_type
-    for module_function_type in ${module_function_types[@]}; 
-    do
-        # Vary data_dist
-        for data_dist in ${data_dists[@]}; 
-        do
-            $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --underlying_model_class "MLP"
-        done
-    done
-done
+#     # Vary module_function_type
+#     for module_function_type in ${module_function_types[@]}; 
+#     do
+#         # Vary data_dist
+#         for data_dist in ${data_dists[@]}; 
+#         do
+#             $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --underlying_model_class "MLP"
+#         done
+#     done
+# done
 
-# # Vary num_features from 2 to 10 for num_modules = 10
-for feature_dim in ${feature_dim_list[@]};
-do
+# # # Vary num_features from 2 to 10 for num_modules = 10
+# for feature_dim in ${feature_dim_list[@]};
+# do
 
-    # Vary module_function_type
-    for module_function_type in ${module_function_types[@]}; 
-    do
-        # Vary data_dist
-        for data_dist in ${data_dists[@]}; 
-        do
-            $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --underlying_model_class "MLP"
-        done
-    done
-done
+#     # Vary module_function_type
+#     for module_function_type in ${module_function_types[@]}; 
+#     do
+#         # Vary data_dist
+#         for data_dist in ${data_dists[@]}; 
+#         do
+#             $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --underlying_model_class "MLP"
+#         done
+#     done
+# done
 
 
 
-# # Vary heterogeneity from 0 to 1 in 0.1 increments
-# # based on number of modules vary the heterogeneity
-# # num_modules=10
-# # heterogeneity_values=(0 1)
-# # for heterogeneity in ${heterogeneity_values[@]}; do
-# #     $base_cmd --num_modules 10 --feature_dim 5 --noise_level 0 --heterogeneity $heterogeneity
-# # done
+# # # Vary heterogeneity from 0 to 1 in 0.1 increments
+# # # based on number of modules vary the heterogeneity
+# # # num_modules=10
+# # # heterogeneity_values=(0 1)
+# # # for heterogeneity in ${heterogeneity_values[@]}; do
+# # #     $base_cmd --num_modules 10 --feature_dim 5 --noise_level 0 --heterogeneity $heterogeneity
+# # # done
 
-# # # Vary noise level from 0 to 1 in 0.1 increments
-# # for noise_level in $(seq 0 0.1 1); do
-# #     $base_cmd --num_modules 5 --feature_dim 5 --noise_level $noise_level --heterogeneity 0
-# # done
+# # # # Vary noise level from 0 to 1 in 0.1 increments
+# # # for noise_level in $(seq 0 0.1 1); do
+# # #     $base_cmd --num_modules 5 --feature_dim 5 --noise_level $noise_level --heterogeneity 0
+# # # done

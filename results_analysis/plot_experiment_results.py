@@ -12,6 +12,7 @@ parser.add_argument("--data_dist", type=str, default="uniform", help="Data distr
 parser.add_argument("--module_function_type", type=str, default="linear", help="Module function type")
 parser.add_argument("--composition_type", type=str, default="parallel", help="Composition type")
 parser.add_argument("--covariates_shared", type=str, default="False", help="Covariates shared")
+parser.add_argument("--run_env", type=str, default="local", help="Run environment")
 
 args = parser.parse_args()
 experiment = args.experiment
@@ -21,11 +22,17 @@ data_dist = args.data_dist
 module_function_type = args.module_function_type
 composition_type = args.composition_type
 covariates_shared = args.covariates_shared
+run_env = args.run_env
 # if covariates_shared == "True": 
 #     covariates_shared = True
 # else:
 #     covariates_shared = False
-results_path = f"/Users/ppruthi/research/novelty_accommodation/compositional_models_cate/domains/synthetic_data/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}"
+if run_env == "local":
+    base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+else:
+    base_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+
+results_path = f"{base_dir}/synthetic_data/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}"
 
 # Lists to store the data for plotting
 # heterogeneity_values = []

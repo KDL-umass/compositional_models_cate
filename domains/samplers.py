@@ -67,7 +67,8 @@ class SyntheticDataSampler:
         domain = "synthetic_data",
         resample = False,
         heterogeneity = 1,
-        covariates_shared = False
+        covariates_shared = False,
+        run_env = "local"
     ):
         self.num_modules = num_modules
         print("num_modules: ", num_modules)
@@ -87,7 +88,11 @@ class SyntheticDataSampler:
         self.module_params_dict = {}
         self.module_functions = None
         self.resample = resample
-        self.base_dir = "/Users/ppruthi/research/novelty_accommodation/compositional_models_cate/domains"
+        self.run_env = run_env
+        if self.run_env == "local":
+            self.base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+        else:
+            self.base_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
         self.heterogeneity = heterogeneity
         self.covariates_shared = covariates_shared
         self.initialize_folders()

@@ -5,8 +5,13 @@ import pandas as pd
 import pickle
 
 
-def setup_directories(domain, fixed_structure, outcomes_parallel):
-    main_dir = "/Users/ppruthi/research/novelty_accommodation/compositional_models_cate/domains"
+def setup_directories(domain, fixed_structure, outcomes_parallel, run_env="local"):
+    if run_env == "local":
+        main_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+    else:
+        main_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+
+    
     subdirs = ["csvs", "jsons", "plots", "results", "config"]
     
     if domain == "synthetic_data":
