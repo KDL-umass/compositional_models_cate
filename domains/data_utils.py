@@ -153,11 +153,14 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
         module_id = node['module_id']
         
         inputs = node['features'] 
-        if node['children'] is not None and composition_type == "hierarchical":
+        if composition_type == "hierarchical":
             # include the output of the children as inputs
-            inputs = inputs + [child['output'] for child in node['children']]
+            if node['children'] is not None:
+                inputs = inputs + [child['output'] for child in node['children']]
+            else:
+                inputs = inputs + [0.0]
         else:
-            inputs = inputs + [0.0]
+            inputs = inputs
         
         module_function = module_functions.get(module_id)
         if module_function is None:

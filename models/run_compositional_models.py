@@ -9,7 +9,7 @@ def setup_directories(domain, fixed_structure, outcomes_parallel, run_env="local
     if run_env == "local":
         main_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
     else:
-        main_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+        main_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
 
     
     subdirs = ["csvs", "jsons", "plots", "results", "config"]

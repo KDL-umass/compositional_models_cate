@@ -22,13 +22,10 @@ def quadratic_module(*inputs, w):
     # take all the inputs
     X = np.array(inputs)
     Mj = len(X)
-    X = np.array(X[:Mj-1])
     w = np.array(w)
     # quadratic outcome function
     x_squared = X**2
-    # print(x_squared.shape, w[:Mj-1].shape)
-    y = np.dot(X**2, w[:Mj-1]) 
-    # print(X.shape, w[Mj:2*Mj].shape )
+    y = np.dot(X**2, w[:Mj]) 
     y += np.dot(X, w[Mj:2*Mj])
     y += w[-1]
     return y
@@ -92,7 +89,7 @@ class SyntheticDataSampler:
         if self.run_env == "local":
             self.base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
         else:
-            self.base_dir = "/work/pi_jensen/ppruthi_umass_edu/compositional_models_cate/domains"
+            self.base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
         self.heterogeneity = heterogeneity
         self.covariates_shared = covariates_shared
         self.initialize_folders()
@@ -152,14 +149,14 @@ class SyntheticDataSampler:
         
         # Generate a base set of weights
         np.random.seed(base_seed)
-        base_weights = np.random.uniform(0, 1, 2 * (self.feature_dim + 1) + 1)
+        base_weights = np.random.uniform(0, 1, 2 * (self.feature_dim) + 1)
         
         # Determine how many modules will have the same weights
         num_same_weight_modules = int(self.num_modules * (1 - self.heterogeneity))
         
         # Define the MLP architecture if needed
         if self.module_type == 'mlp':
-            input_dim = self.feature_dim + 1
+            input_dim = self.feature_dim
             hidden_dim1 = 2 * input_dim
             hidden_dim2 = 2 * input_dim
             output_dim = 1
@@ -190,7 +187,7 @@ class SyntheticDataSampler:
                 np.random.seed(base_seed + module_id)
                 if self.module_type == 'linear' or self.module_type == 'quadratic':
                     # 2 for the quadratic function, Mj +1 for the treatment and 1 for the bias term
-                    w = np.random.uniform(0, 1, 2 * (Mj+1) + 1)
+                    w = np.random.uniform(0, 1, 2 * (Mj) + 1)
                 elif self.module_type == 'mlp':
                     model = create_mlp()
                     # Initialize the weights randomly
