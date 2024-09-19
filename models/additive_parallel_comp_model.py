@@ -53,12 +53,22 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     # now for each module, get the ground truth and estimated effects
     additive_ground_truth_effects = {}
     additive_estimated_effects = {}
+    modules_csvs = {}
     for module_file in module_files:
+        module_name = module_file.split(".")[0]
         train_df = train_data[module_file]
         test_df = test_data[module_file]
         module_causal_effect_dict_test = get_ground_truth_effects(module_data[module_file], train_qids, treatment_col="treatment_id", outcome_col="output")
         module_estimated_effects = get_estimated_effects(train_df, train_qids)
-        module_combined_df = pd.DataFrame({"ground_truth_effect": list(module_causal_effect_dict_test.values()), "estimated_effect": list(module_estimated_effects.values())})
+        # have a combined df with ground truth and estimated effects based on the query_id
+        module_gt_effect_df = pd.DataFrame.from_dict(module_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
+        # add the estimated effects based on query ids with same order
+        module_estimated_effects_df = pd.DataFrame.from_dict(module_estimated_effects, orient="index", columns=["estimated_effect"])
+        # merge 
+        module_combined_df = pd.concat([module_gt_effect_df, module_estimated_effects_df], axis=1)
+        modules_csvs[module_name] = module_combined_df
+
+        
         if len(additive_estimated_effects) == 0:
             additive_ground_truth_effects = module_causal_effect_dict_test
             additive_estimated_effects = module_estimated_effects
@@ -67,6 +77,8 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
             additive_ground_truth_effects = {k: v + module_causal_effect_dict_test[k] for k, v in additive_ground_truth_effects.items()}
             additive_estimated_effects = {k: v + module_estimated_effects[k] for k, v in additive_estimated_effects.items()}
         
-    additive_combined_df = pd.DataFrame({"ground_truth_effect": additive_ground_truth_effects, "estimated_effect": additive_estimated_effects})
+    additive_gt_effect_df = pd.DataFrame.from_dict(additive_ground_truth_effects, orient="index", columns=["ground_truth_effect"])
+    additive_estimated_effect_df = pd.DataFrame.from_dict(additive_estimated_effects, orient="index", columns=["estimated_effect"])
+    additive_combined_df = pd.concat([additive_gt_effect_df, additive_estimated_effect_df], axis=1)
 
-    return additive_combined_df
+    return additive_combined_df, modules_csvs

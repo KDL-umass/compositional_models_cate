@@ -3,7 +3,7 @@
 base_cmd="python plot_experiment_results.py"
 experiments=("num_modules" "feature_dim")
 data_dists=("normal" "uniform")
-module_function_types=("linear" "quadratic")
+module_function_types=("linear" "quadratic", "mlp")
 covariates_shared=("True" "False")
 
 for experiment in ${experiments[@]};

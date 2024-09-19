@@ -65,7 +65,10 @@ class SyntheticDataSampler:
         resample = False,
         heterogeneity = 1,
         covariates_shared = False,
-        run_env = "local"
+        use_subset_features = False,
+        run_env = "local",
+        systematic = False,
+        trees_per_group = 1000
     ):
         self.num_modules = num_modules
         print("num_modules: ", num_modules)
@@ -92,12 +95,15 @@ class SyntheticDataSampler:
             self.base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
         self.heterogeneity = heterogeneity
         self.covariates_shared = covariates_shared
+        self.use_subset_features = use_subset_features
+        self.trees_per_group = trees_per_group
+        self.systematic = systematic
         self.initialize_folders()
 
         
     def initialize_folders(self):
             # make path if doesn't exist
-        self.data_path = "{}/{}/jsons/fixed_structure_{}_outcomes_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type)
+        self.data_path = "{}/{}/jsons/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
         folder_0 = "data_0"
         folder_1 = "data_1"
         self.path_0 = "{}/{}".format(self.data_path, folder_0)
@@ -118,7 +124,7 @@ class SyntheticDataSampler:
                 shutil.rmtree(self.path_1)
                 os.makedirs(self.path_1)
 
-        self.csv_folder = "{}/{}/csvs/fixed_structure_{}_outcomes_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type)
+        self.csv_folder = "{}/{}/csvs/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
         if not os.path.exists(self.csv_folder):
             os.makedirs(self.csv_folder)
         else:
@@ -128,35 +134,45 @@ class SyntheticDataSampler:
                 os.makedirs(self.csv_folder)
         self.json_folders = [self.path_0, self.path_1]
 
-        self.obs_csv_folder = "{}/{}/observational_data/fixed_structure_{}_outcomes_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type)
+        self.obs_csv_folder = "{}/{}/observational_data/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
         if not os.path.exists(self.obs_csv_folder):
             os.makedirs(self.obs_csv_folder)
 
-        self.plot_folder = "{}/{}/plots/fixed_structure_{}_outcomes_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type)
+        self.plot_folder = "{}/{}/plots/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
         if not os.path.exists(self.plot_folder):
             os.makedirs(self.plot_folder)
 
-        self.config_folder = "{}/{}/config/fixed_structure_{}_outcomes_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type)
+        self.config_folder = "{}/{}/config/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
         if not os.path.exists(self.config_folder):
             os.makedirs(self.config_folder)
 
 
     def generate_trees(self):
-        self.input_trees, self.module_means, self.module_covs = generate_input_trees(self.num_modules, self.feature_dim, self.seed, self.num_trees, self.max_depth, self.fixed_structure, self.data_dist, self.covariates_shared)
-    
+        self.input_trees = generate_input_trees(self.num_modules, self.feature_dim, self.seed, self.num_trees, self.max_depth, self.fixed_structure, self.data_dist, self.covariates_shared, self.systematic, self.trees_per_group)
+        
+        
     def generate_module_weights(self, treatment_id):
         base_seed = self.seed + treatment_id * 100
         
         # Generate a base set of weights
         np.random.seed(base_seed)
-        base_weights = np.random.uniform(0, 1, 2 * (self.feature_dim) + 1)
+        if not self.use_subset_features:
+            base_weights = np.random.uniform(0, 1, 2 * (self.feature_dim) + 1)
+            module_feature_dim = self.feature_dim
+        else:
+            # set feature dim equally across all modules
+            num_modules = self.num_modules
+            feature_dim = self.feature_dim
+            feature_dim_per_module = int(feature_dim / num_modules)
+            base_weights = np.random.uniform(0, 1, 2 * (feature_dim_per_module) + 1)
+            module_feature_dim = feature_dim_per_module
         
         # Determine how many modules will have the same weights
         num_same_weight_modules = int(self.num_modules * (1 - self.heterogeneity))
         
         # Define the MLP architecture if needed
         if self.module_type == 'mlp':
-            input_dim = self.feature_dim
+            input_dim = module_feature_dim
             hidden_dim1 = 2 * input_dim
             hidden_dim2 = 2 * input_dim
             output_dim = 1
@@ -174,7 +190,7 @@ class SyntheticDataSampler:
             base_mlp = create_mlp()
         
         for module_id in range(1, self.num_modules + 1):
-            Mj = self.feature_dim
+            Mj = module_feature_dim # feature dim for this module
             
             if module_id <= num_same_weight_modules:
                 # Use exactly the same weights for these modules
@@ -201,7 +217,7 @@ class SyntheticDataSampler:
             elif self.module_type == 'mlp':
                 self.module_params_dict[module_id] = {"model": model}
 
-    def simulate_potential_outcomes(self, treatment_id):
+    def simulate_potential_outcomes(self, treatment_id, use_subset_features = False):
         self.generate_trees()
         module_functions = {}
         for module_id in range(1, self.num_modules + 1):
@@ -219,7 +235,7 @@ class SyntheticDataSampler:
             input_tree = tree
             # sample module parameters
 
-            input_processed_tree_dict, query_output = simulate_outcome(input_tree, treatment_id, self.module_functions, self.module_params_dict, self.max_depth, self.feature_dim, self.composition_type)
+            input_processed_tree_dict, query_output = simulate_outcome(input_tree, treatment_id, self.module_functions, self.module_params_dict, self.max_depth, self.feature_dim, self.composition_type, self.use_subset_features)
             if self.composition_type == "hierarchical":
                 input_processed_tree_dict = expand_features(input_processed_tree_dict)
             input_dict = {}
@@ -274,7 +290,6 @@ class SyntheticDataSampler:
                 query_output = data["query_output"]
                 self.input_trees_dict[treatment_id].append((query_id, input_tree, treatment_id, query_output))
     
-    
     def create_observational_data(self, biasing_covariate, bias_strength):
         high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
         # open the file
@@ -307,6 +322,8 @@ class SyntheticDataSampler:
         depths = grouped["tree_depth"].unique()
         split_idx = int(len(depths) * (1 - test_size))
         train_depths, test_depths = depths[:split_idx], depths[split_idx:]
+        print("train depths: ", train_depths)
+        print("test depths: ", test_depths)
         split_dict = {"train": [], "test": []}
         for i, row in grouped.iterrows():
             query_ids = row["query_id"]
@@ -758,13 +775,15 @@ if __name__ == "__main__":
     num_modules = 10
     feature_dim = 6
     composition_type = "parallel"
-    fixed_structure = True
+    fixed_structure = False
     max_depth = num_modules
     num_trees = 5000
     seed = 42
     data_dist = "uniform"
+    systematic = True
+
     module_function_type_list = ["linear_module"]
-    sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type_list)
+    sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type_list, systematic=sysetamtic)
     sampler.simulate_data()
 
     # # test the maths evaluation data sampler

@@ -10,8 +10,9 @@ import matplotlib.pyplot as plt
 from domains.tree_data_structures import ExpressionNode, QueryPlanNode, Node
 import torch
 import torch.nn as nn
+from itertools import combinations
 
-def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, fixed_structure=False, data_dist="uniform", covariates_shared=False):
+def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, fixed_structure=False, data_dist="uniform", covariates_shared=False, systematic=False, trees_per_group=100):
     """
     Generate different input structures in the form of trees.
 
@@ -144,15 +145,180 @@ def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, ma
             input_trees.append(build_tree(root_module_id, 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features))
 
 
-    return input_trees, module_means, module_covs
+    return input_trees
 
-def simulate_outcome(input_tree, treatment_id, module_functions, module_params_dict, max_depth=float('inf'), feature_dim=3, composition_type="hierarchical"):
+# def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, 
+#                          fixed_structure=False, data_dist="uniform", covariates_shared=False, 
+#                          systematic=False, trees_per_group=100):
+#     """
+#     Generate different input structures in the form of trees.
+
+#     Args:
+#         num_modules (int): The number of distinct modules.
+#         feature_dim (int): The dimension of the feature vectors.
+#         seed (int): The seed value for random number generation.
+#         num_trees (int): The number of input trees to generate (used when systematic=False).
+#         max_depth (int): The maximum depth of the input trees.
+#         fixed_structure (bool): Whether to generate input trees with a fixed structure.
+#         data_dist (str): The distribution of the data. Can be "uniform" or "normal".
+#         covariates_shared (bool): Whether to use shared covariates across nodes in a tree.
+#         systematic (bool): Whether to generate trees systematically with all possible module combinations.
+#         trees_per_group (int): The number of trees to generate for each group size when systematic=True.
+
+#     Returns:
+#         If systematic=False: 
+#             tuple: (list of input trees, module_means, module_covs)
+#         If systematic=True:
+#             dict: A dictionary where keys are the number of modules and values are lists of input trees for all combinations.
+#     """
+#     random.seed(seed)
+#     np.random.seed(seed)
+
+#     def generate_feature(module_id=None, shared_features=None, feature_dim=3, data_dist="uniform"):
+#         if data_dist == "normal":
+#             if not covariates_shared:
+#                 means = np.random.uniform(0, 1, feature_dim)
+#                 covs = np.random.uniform(0, 3, (feature_dim, feature_dim))
+#                 covs = covs @ covs.T + np.eye(feature_dim)
+#                 return np.random.multivariate_normal(means, covs)
+#             else:
+#                 return shared_features
+#         elif data_dist == "uniform":
+#             if not covariates_shared:
+#                 return np.random.uniform(0, 1, feature_dim)
+#             else:
+#                 return shared_features
+
+#     def build_tree(module_id, depth, used_modules=None, shared_features=None, data_dist="uniform", feature_dim=3):
+#         feature = generate_feature(module_id, shared_features=shared_features, feature_dim=feature_dim, data_dist=data_dist)
+#         if depth >= max_depth or (random.random() < 0.2 and depth > 3):
+#             return Node(module_id, module_id, feature.tolist())
+
+#         children = []
+#         child_module_id = random.randint(1, num_modules)
+#         child_node = build_tree(child_module_id, depth + 1)
+#         children.append(child_node)
+#         return Node(module_id, module_id, feature.tolist(), children=children)
+
+#     def build_tree_fixed(module_id, depth, used_modules, shared_features=None):
+#         if module_id in used_modules:
+#             return None
+        
+#         feature = generate_feature(module_id, shared_features=shared_features)
+#         used_modules.add(module_id)
+        
+#         if depth >= max_depth or len(used_modules) == num_modules:
+#             return Node(module_id, module_id, feature.tolist())
+
+#         children = []
+#         unused_modules = set(range(1, num_modules + 1)) - used_modules
+#         if unused_modules:
+#             child_module_id = random.choice(list(unused_modules))
+#             child_node = build_tree_fixed(child_module_id, depth + 1, used_modules)
+#             if child_node:
+#                 children.append(child_node)
+
+#         return Node(module_id, module_id, feature.tolist(), children=children)
+
+#     def build_tree_systematically(modules, depth=1, used_modules=None, shared_features=None):
+#         if used_modules is None:
+#             used_modules = set()
+        
+#         unused_modules = set(modules) - used_modules
+#         if not unused_modules:
+#             return None
+        
+#         module_id = random.choice(list(unused_modules))
+#         feature = generate_feature(module_id, shared_features=shared_features)
+#         used_modules.add(module_id)
+        
+#         if depth >= max_depth or len(used_modules) == len(modules):
+#             return Node(module_id, module_id, feature.tolist())
+        
+#         child_node = build_tree_systematically(modules, depth + 1, used_modules)
+#         children = [child_node] if child_node else []
+        
+#         return Node(module_id, module_id, feature.tolist(), children=children)
+
+#     if systematic:
+#         grouped_trees = {}
+#         all_modules = list(range(1, num_modules + 1))
+        
+#         for group_size in range(2, num_modules + 1):
+#             print(f"Generating trees for group size: {group_size}")
+#             group_trees = []
+#             combinations_list = list(combinations(all_modules, group_size))
+#             print(f"Number of combinations: {len(combinations_list)}")
+#             trees_per_combination = trees_per_group // len(combinations_list)
+            
+#             for module_combination in combinations_list:
+#                 for _ in range(trees_per_combination):
+#                     if covariates_shared:
+#                         shared_features = generate_feature()
+#                     else:
+#                         shared_features = None
+                    
+#                     tree = build_tree_systematically(module_combination, shared_features=shared_features)
+#                     if tree:
+#                         group_trees.append(tree)
+            
+#             grouped_trees[group_size] = group_trees
+
+#             # count the total number of trees
+#             total_trees = sum(len(trees) for trees in grouped_trees.values())
+#             # print tree for each group size
+#             for group_size, trees in grouped_trees.items():
+#                 print(f"Group size: {group_size}, Number of trees: {len(trees)}")
+#             # have a single list of trees
+#             all_trees = [tree for trees in grouped_trees.values() for tree in trees]
+        
+#         return all_trees
+#     else:
+#         input_trees = []
+#         # module_means = {}
+#         # module_covs = {}
+
+#         for _ in range(num_trees):
+#             root_module_id = random.randint(1, num_modules)
+#             if covariates_shared:
+#                 shared_features = generate_feature()
+#             else:
+#                 shared_features = None
+            
+#             if fixed_structure:
+#                 input_trees.append(build_tree_fixed(root_module_id, 1, set(), shared_features=shared_features))
+#             else:
+#                 input_trees.append(build_tree(root_module_id, 1, shared_features=shared_features))
+
+#         return input_trees
+
+# def count_systematic_trees(grouped_trees):
+#     """
+#     Count the total number of trees in the grouped_trees dictionary.
+#     """
+#     total_trees = sum(len(trees) for trees in grouped_trees.values())
+#     return total_trees
+    
+def simulate_outcome(input_tree, treatment_id, module_functions, module_params_dict, max_depth=float('inf'), feature_dim=3, composition_type="hierarchical", use_subset_features=False):
     def propagate(node, depth=1):
         if depth > max_depth:
             return 0.0
         module_id = node['module_id']
-        
-        inputs = node['features'] 
+
+        if not use_subset_features:
+            inputs = node['features'] 
+        else:
+            # get total number of modules 
+            num_modules = len(module_functions)
+            # divide the features into equal parts for each module
+            num_features_per_module = feature_dim // num_modules
+            # get the index of the first feature for the current module
+            start_index = (module_id - 1) * num_features_per_module
+            # get the index of the last feature for the current module
+            end_index = start_index + num_features_per_module
+            inputs = node['features'][start_index:end_index]
+            
+
         if composition_type == "hierarchical":
             # include the output of the children as inputs
             if node['children'] is not None:

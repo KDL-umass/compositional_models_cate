@@ -16,8 +16,8 @@ warnings.filterwarnings('ignore')
 
 # Define the argument parser
 parser = argparse.ArgumentParser(description="Train modular neural network architectures and baselines for causal effect estimation")
-parser.add_argument("--num_modules", type=int, default=1, help="Number of modules")
-parser.add_argument("--num_feature_dimensions", type=int, default=10, help="Number of feature dimensions")
+parser.add_argument("--num_modules", type=int, default=10, help="Number of modules")
+parser.add_argument("--num_feature_dimensions", type=int, default=6, help="Number of feature dimensions")
 parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
 parser.add_argument("--module_function_type", type=str, default="linear", help="Module function type")
 parser.add_argument("--composition_type", type=str, default="parallel", help="Composition type")
@@ -41,6 +41,10 @@ parser.add_argument("--covariates_shared", type=str, default="False", help="Cova
 parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
 # run_env
 parser.add_argument("--run_env", type=str, default="local", help="Run environment")
+# use_subset_features
+parser.add_argument("--use_subset_features", type=bool, default=True, help="Use subset of features")
+# generate trees systematically for creating OOD data
+parser.add_argument("--systematic", type=bool, default=False, help="Systematic tree generation")
 
 # parse arguments
 args = parser.parse_args()
@@ -63,10 +67,17 @@ output_dim = args.output_dim
 data_dist = args.data_dist
 covariates_shared = args.covariates_shared
 underlying_model_class = args.underlying_model_class
+use_subset_features = args.use_subset_features
+systematic = args.systematic
 if covariates_shared == "True":
     covariates_shared = True
 else:
     covariates_shared = False
+
+if use_subset_features == "True":
+    use_subset_features = True
+else:
+    use_subset_features = False
 
 domain = "synthetic_data"
 # setup directories
@@ -82,7 +93,7 @@ csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composi
 obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}"
 
 # simulate data
-sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type, resample=resample,heterogeneity=args.heterogeneity, covariates_shared=covariates_shared)
+sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type, resample=resample,heterogeneity=args.heterogeneity, covariates_shared=covariates_shared, use_subset_features=use_subset_features,systematic=systematic)
 sampler.simulate_data()
 
 # read the data
@@ -119,47 +130,65 @@ if args.split_type == "iid":
     test_df = train_df
 
 input_dim = len(covariates)
+
 if underlying_model_class == "MLP":
     # make sure hidden dim is greater than input dim
     baseline_model = BaselineModel(input_dim + 1, (input_dim + 1)*2, output_dim)
 else:
     baseline_model = BaselineLinearModel(input_dim + 1, output_dim)
+
 print("Training Baseline Model")
-print(train_df.head())
 baseline_model, train_losses, val_losses = train_model(baseline_model, train_df, covariates, treatment, outcome, epochs, batch_size)
 causal_effect_estimates = predict_model(baseline_model, test_df, covariates)
 test_df.loc[:, "estimated_effect"] = causal_effect_estimates
 baseline_estimated_effects = get_estimated_effects(test_df, train_qids)
 baseline_causal_effect_dict_test = get_ground_truth_effects(data, train_qids)
 
-# have combined df with ground truth and estimated effects
-baseline_combined_df = pd.DataFrame({"ground_truth_effect": list(baseline_causal_effect_dict_test.values()), "estimated_effect": list(baseline_estimated_effects.values())})
+# have combined df with ground truth and estimated effects based on the query_id
+baseline_combined_df = pd.DataFrame.from_dict(baseline_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
+# add the estimated effects based on query ids with same order
+baseline_estimated_effects_df = pd.DataFrame.from_dict(baseline_estimated_effects, orient="index", columns=["estimated_effect"])
+baseline_combined_df = pd.concat([baseline_combined_df, baseline_estimated_effects_df], axis=1)
+
+
 
 # MoE Baseline
 if underlying_model_class == "MLP":
     moe_model = MoE(input_dim+1, (input_dim + 1)*2, output_dim, num_modules)
 else:
     moe_model = MoELinear(input_dim+1, output_dim, num_modules)
+print("Training MoE Model")
 train_model(moe_model, train_df, covariates, treatment, outcome, epochs, batch_size)
 moe_causal_effect_estimates = predict_model(moe_model, test_df, covariates)
 test_df.loc[:, "estimated_effect"] = moe_causal_effect_estimates
 moe_estimated_effects = get_estimated_effects(test_df, train_qids)
-baseline_combined_df["estimated_effect_moe"] = list(moe_estimated_effects.values())
+moe_estimated_effects_df = pd.DataFrame.from_dict(moe_estimated_effects, orient="index", columns=["estimated_effect_moe"])
+baseline_combined_df = pd.concat([baseline_combined_df, moe_estimated_effects_df], axis=1)
 
 # Explicitly modular model+
 print("Training Additive Model")
-additive_combined_df = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class)
+print(f"Training Additive Model with hidden dim: {hidden_dim}")
+additive_combined_df, module_csvs = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class)
+
+for module_name, module_df in module_csvs.items():
+    module_df.to_csv(f"{main_dir}/results/csvs/{module_name}.csv")
 # combine the two dataframes: baseline_combined_df and additive_combined_df on query_id
-baseline_combined_df["query_id"] = list(baseline_combined_df.index)
-additive_combined_df["query_id"] = list(additive_combined_df.index)
-combined_df = pd.merge(baseline_combined_df, additive_combined_df, on="query_id", suffixes=("_baseline", "_additive"))
+
+# merge the two dataframes on index
+combined_df = pd.merge(baseline_combined_df, additive_combined_df, left_index=True, right_index=True, suffixes=("_baseline", "_additive"))
+
+# save the combined df
+results_csv_folder = f"{main_dir}/results/csvs"
+os.makedirs(results_csv_folder, exist_ok=True)
+combined_df.to_csv(f"{results_csv_folder}/combined_df_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
+
 
 # Save Results
 pehe_baseline = pehe(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_baseline"])
 pehe_additive = pehe(combined_df["ground_truth_effect_additive"], combined_df["estimated_effect_additive"])
 pehe_moe = pehe(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_moe"])
 
-print(combined_df.head())
+
 
 r2_baseline = get_r2_score(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_baseline"])
 r2_additive = get_r2_score(combined_df["ground_truth_effect_additive"], combined_df["estimated_effect_additive"])
@@ -172,7 +201,7 @@ print(f"PEHE for MoE model: {pehe_moe}")
 
 # save the results
 results = {"pehe_baseline": pehe_baseline, "pehe_additive": pehe_additive, "pehe_moe": pehe_moe, "r2_baseline": r2_baseline, "r2_additive": r2_additive, "r2_moe": r2_moe}
-results_path = f"{main_dir}/results/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}"
+results_path = f"{main_dir}/results/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}"
 os.makedirs(results_path, exist_ok=True)
 results_file = f"{results_path}/results_{num_modules}_{feature_dim}.json"
 print(f"Results saved at {results_file}")
