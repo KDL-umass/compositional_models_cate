@@ -8,7 +8,7 @@ import os
 # This model trains a separate model for each module and sums the estimated effects.
 def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP"):
     module_files = os.listdir(f"{csv_path}/")
-    print(module_files)
+    
     module_files = [x for x in module_files if "module" in x]
 
     # read all the module files
@@ -47,48 +47,77 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
             expert_model = BaselineLinearModel(input_dim + 1, output_dim)
         
         expert_model, train_losses, val_losses = train_model(expert_model, train_df, covariates, treatment, outcome, epochs, batch_size)
-        causal_effect_estimates = predict_model(expert_model, test_df, covariates)
-        test_df["estimated_effect"] = causal_effect_estimates
+        causal_effect_estimates_train = predict_model(expert_model, train_df, covariates)
+        causal_effect_estimates_test = predict_model(expert_model, test_df, covariates)
+        train_df["estimated_effect"] = causal_effect_estimates_train
+        test_df["estimated_effect"] = causal_effect_estimates_test
+        train_data[module_file] = train_df
         test_data[module_file] = test_df
 
     # now for each module, get the ground truth and estimated effects
-    additive_ground_truth_effects = {}
-    additive_estimated_effects = {}
+    additive_ground_truth_effects_train = {}
+    additive_estimated_effects_train = {}
+    additive_ground_truth_effects_test = {}
+    additive_estimated_effects_test = {}
     modules_csvs = {}
     for module_file in module_files:
         module_name = module_file.split(".")[0]
         train_df = train_data[module_file]
         test_df = test_data[module_file]
+        module_causal_effect_dict_train = get_ground_truth_effects(module_data[module_file], train_qids, treatment_col="treatment_id", outcome_col="output")
         module_causal_effect_dict_test = get_ground_truth_effects(module_data[module_file], test_qids, treatment_col="treatment_id", outcome_col="output")
-        module_estimated_effects = get_estimated_effects(test_df, test_qids)
+        module_estimated_effects_train = get_estimated_effects(train_df, train_qids)
+        module_estimated_effects_test = get_estimated_effects(test_df, test_qids)
         # have a combined df with ground truth and estimated effects based on the query_id
-        module_gt_effect_df = pd.DataFrame.from_dict(module_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
+        module_gt_effect_df_train = pd.DataFrame.from_dict(module_causal_effect_dict_train, orient="index", columns=["ground_truth_effect"])
+        module_gt_effect_df_test = pd.DataFrame.from_dict(module_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
+
         # add the estimated effects based on query ids with same order
-        module_estimated_effects_df = pd.DataFrame.from_dict(module_estimated_effects, orient="index", columns=["estimated_effect"])
+        module_estimated_effects_train_df = pd.DataFrame.from_dict(module_estimated_effects_train, orient="index", columns=["estimated_effect"])
+        module_estimated_effects_test_df = pd.DataFrame.from_dict(module_estimated_effects_test, orient="index", columns=["estimated_effect"])
         # merge 
-        module_combined_df = pd.concat([module_gt_effect_df, module_estimated_effects_df], axis=1)
-        modules_csvs[module_name] = module_combined_df
+        module_combined_train_df = pd.concat([module_gt_effect_df_train, module_estimated_effects_train_df], axis=1)
+        module_combined_test_df = pd.concat([module_gt_effect_df_test, module_estimated_effects_test_df], axis=1)
+        modules_csvs[module_name] = module_combined_test_df
 
         
-        if len(additive_estimated_effects) == 0:
-            additive_ground_truth_effects = module_causal_effect_dict_test
-            additive_estimated_effects = module_estimated_effects
+        if len(additive_estimated_effects_test) == 0:
+            additive_ground_truth_effects_test = module_causal_effect_dict_test
+            additive_estimated_effects_test = module_estimated_effects_test
         else:
             # add the effects
             # handle the case where the query ids are not the same, check if k is in the other dict oyherwise add 0
             for k, v in module_causal_effect_dict_test.items():
-                if k not in additive_ground_truth_effects:
-                    additive_ground_truth_effects[k] = v
+                if k not in additive_ground_truth_effects_test:
+                    additive_ground_truth_effects_test[k] = v
                 else:
-                    additive_ground_truth_effects[k] += v
-                if k not in additive_estimated_effects:
-                    additive_estimated_effects[k] = v
+                    additive_ground_truth_effects_test[k] += v
+                if k not in additive_estimated_effects_test:
+                    additive_estimated_effects_test[k] = module_estimated_effects_test[k]
                 else:
-                    additive_estimated_effects[k] += v
+                    additive_estimated_effects_test[k] += module_estimated_effects_test[k]
+
+        if len(additive_estimated_effects_train) == 0:
+            additive_ground_truth_effects_train = module_causal_effect_dict_train
+            additive_estimated_effects_train = module_estimated_effects_train
+        else:
+            for k, v in module_causal_effect_dict_train.items():
+                if k not in additive_ground_truth_effects_train:
+                    additive_ground_truth_effects_train[k] = v
+                else:
+                    additive_ground_truth_effects_train[k] += v
+                if k not in additive_estimated_effects_train:
+                    additive_estimated_effects_train[k] = module_estimated_effects_train[k]
+                else:
+                    additive_estimated_effects_train[k] += module_estimated_effects_train[k]
 
             
-    additive_gt_effect_df = pd.DataFrame.from_dict(additive_ground_truth_effects, orient="index", columns=["ground_truth_effect"])
-    additive_estimated_effect_df = pd.DataFrame.from_dict(additive_estimated_effects, orient="index", columns=["estimated_effect"])
-    additive_combined_df = pd.concat([additive_gt_effect_df, additive_estimated_effect_df], axis=1)
+    additive_gt_effect_train_df = pd.DataFrame.from_dict(additive_ground_truth_effects_train, orient="index", columns=["ground_truth_effect"])
+    additive_estimated_effect_train_df = pd.DataFrame.from_dict(additive_estimated_effects_train, orient="index", columns=["estimated_effect"])
+    additive_combined_train_df = pd.concat([additive_gt_effect_train_df, additive_estimated_effect_train_df], axis=1)
 
-    return additive_combined_df, modules_csvs
+    additive_gt_effect_test_df = pd.DataFrame.from_dict(additive_ground_truth_effects_test, orient="index", columns=["ground_truth_effect"])
+    additive_estimated_effect_test_df = pd.DataFrame.from_dict(additive_estimated_effects_test, orient="index", columns=["estimated_effect"])
+    additive_combined_test_df = pd.concat([additive_gt_effect_test_df, additive_estimated_effect_test_df], axis=1)
+
+    return additive_combined_train_df, additive_combined_test_df, modules_csvs

@@ -46,7 +46,7 @@ def build_tree_systematically(modules, depth, used_modules, data_dist="uniform",
     
     return Node(module_id, module_id, feature.tolist(), children=children)
 
-def build_tree_random(module_id, depth, data_dist="uniform", covariates_shared=False, input_features=None, num_modules=10, max_depth=5):
+def build_tree_random(module_id, depth, data_dist="uniform", covariates_shared=False, input_features=None, num_modules=10, max_depth=5, feature_dim=3):
     """
     Recursively build an input tree.
 
@@ -66,12 +66,12 @@ def build_tree_random(module_id, depth, data_dist="uniform", covariates_shared=F
 
     children = []
     child_module_id = random.randint(1,num_modules)
-    child_node = build_tree_random(child_module_id, depth + 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth)
+    child_node = build_tree_random(child_module_id, depth + 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth, feature_dim=feature_dim)
     children.append(child_node)
     return Node(module_id, module_id, feature.tolist(), children=children)
 
 
-def build_tree_exactly_once(module_id, depth, used_modules, data_dist="uniform", covariates_shared=False, input_features=None, num_modules=10, max_depth=5):
+def build_tree_exactly_once(module_id, depth, used_modules, data_dist="uniform", covariates_shared=False, input_features=None, num_modules=10, max_depth=5, feature_dim=3):
     # print("module_id: ", module_id)
     used_modules.add(module_id)
     # print("used_modules: ", used_modules)
@@ -101,7 +101,7 @@ def build_tree_exactly_once(module_id, depth, used_modules, data_dist="uniform",
     if len(unused_modules) != 0:
         child_module_id = random.choice(list(unused_modules))
         used_modules.add(child_module_id)
-        child_node = build_tree_exactly_once(child_module_id, depth + 1, used_modules, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth)
+        child_node = build_tree_exactly_once(child_module_id, depth + 1, used_modules, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth, feature_dim=feature_dim)
         children.append(child_node)
 
     return Node(module_id, module_id, feature.tolist(), children=children)
@@ -116,10 +116,10 @@ def generate_fixed_variable_structure_trees(num_modules, feature_dim=3, seed=42,
             
         if fixed_structure:
             # print("Generating trees with each module appearing exactly once.")
-            input_trees.append(build_tree_exactly_once(root_module_id, 1, set(), data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth))
+            input_trees.append(build_tree_exactly_once(root_module_id, 1, set(), data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth, feature_dim=feature_dim))
         else:
             # print("Generating trees with modules appearing multiple times.")
-            input_trees.append(build_tree_random(root_module_id, 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth))
+            input_trees.append(build_tree_random(root_module_id, 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth, feature_dim=feature_dim))
 
 
     return input_trees
@@ -351,7 +351,7 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
             inputs = node['features'][start_index:end_index]
             
             
-
+        
         if composition_type == "hierarchical":
             # include the output of the children as inputs
             if node['children'] is not None:

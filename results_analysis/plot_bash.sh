@@ -3,8 +3,9 @@
 base_cmd="python plot_experiment_results.py"
 experiments=("feature_dim")
 data_dists=("normal")
-module_function_types=("quadratic", "mlp")
+module_function_types=("mlp")
 covariates_shared=("True")
+
 
 for experiment in ${experiments[@]};
 do
@@ -14,9 +15,11 @@ do
         do
             for covariate_shared in ${covariates_shared[@]};
             do
-                $base_cmd --experiment $experiment --data_dist $data_dist --module_function_type $module_function_type --covariates_shared $covariate_shared --covariates_shared True --underlying_model_class "MLP" --use_subset_features True --run_env "unity"
+                $base_cmd --experiment $experiment --data_dist $data_dist --module_function_type $module_function_type --covariates_shared $covariate_shared  --underlying_model_class "MLP" --use_subset_features True --run_env "unity" --metric pehe
+                $base_cmd --experiment $experiment --data_dist $data_dist --module_function_type $module_function_type --covariates_shared $covariate_shared --underlying_model_class "MLP" --use_subset_features False --run_env "unity" --metric pehe
        
             done
         done
     done
 done
+

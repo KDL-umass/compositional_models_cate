@@ -40,7 +40,7 @@ parser.add_argument("--covariates_shared", type=str, default="True", help="Covar
 # model_class
 parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
 # run_env
-parser.add_argument("--run_env", type=str, default="local", help="Run environment")
+parser.add_argument("--run_env", type=str, default="unity", help="Run environment")
 # use_subset_features
 parser.add_argument("--use_subset_features", type=str, default="True", help="Use subset of features")
 # generate trees systematically for creating OOD data
@@ -129,7 +129,9 @@ else:
     covariates = [x for x in train_df.columns if "feature" in x]
 treatment = "treatment_id"
 outcome = "query_output"
-baseline_causal_effect_dict_test = get_ground_truth_effects(data, test_qids)
+# get ground truth effects
+baseline_gt_causal_effect_dict_test = get_ground_truth_effects(data, test_qids)
+baseline_gt_causal_effect_dict_train = get_ground_truth_effects(data, train_qids)
 # # X_test = test_df[covariates].values
 # if args.split_type == "iid":
 #     test_df = train_df
@@ -146,17 +148,26 @@ else:
 
 print("Training Baseline Model")
 baseline_model, train_losses, val_losses = train_model(baseline_model, train_df, covariates, treatment, outcome, epochs, batch_size)
-causal_effect_estimates = predict_model(baseline_model, test_df, covariates)
-test_df.loc[:, "estimated_effect"] = causal_effect_estimates
-baseline_estimated_effects = get_estimated_effects(test_df, test_qids)
 
-# have combined df with ground truth and estimated effects based on the query_id
-baseline_combined_df = pd.DataFrame.from_dict(baseline_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
-# add the estimated effects based on query ids with same order
-baseline_estimated_effects_df = pd.DataFrame.from_dict(baseline_estimated_effects, orient="index", columns=["estimated_effect"])
-baseline_combined_df = pd.concat([baseline_combined_df, baseline_estimated_effects_df], axis=1)
+# get causal effect estimates
+causal_effect_estimates_test = predict_model(baseline_model, test_df, covariates)
+causal_effect_estimates_train = predict_model(baseline_model, train_df, covariates)
 
+# get estimated effects
+test_df.loc[:, "estimated_effect"] = causal_effect_estimates_test
+train_df.loc[:, "estimated_effect"] = causal_effect_estimates_train
 
+# get estimated effects
+baseline_estimated_effects_test = get_estimated_effects(test_df, test_qids)
+baseline_estimated_effects_train = get_estimated_effects(train_df, train_qids)
+
+baseline_combined_df_train = pd.DataFrame.from_dict(baseline_gt_causal_effect_dict_train, orient="index", columns=["ground_truth_effect"])
+baseline_estimated_effects_train_df = pd.DataFrame.from_dict(baseline_estimated_effects_train, orient="index", columns=["estimated_effect"])
+baseline_combined_df_train = pd.concat([baseline_combined_df_train, baseline_estimated_effects_train_df], axis=1)
+
+baseline_combined_df_test = pd.DataFrame.from_dict(baseline_gt_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
+baseline_estimated_effects_test_df = pd.DataFrame.from_dict(baseline_estimated_effects_test, orient="index", columns=["estimated_effect"])
+baseline_combined_df_test = pd.concat([baseline_combined_df_test, baseline_estimated_effects_test_df], axis=1)
 
 # MoE Baseline
 if underlying_model_class == "MLP":
@@ -165,53 +176,68 @@ else:
     moe_model = MoELinear(input_dim+1, output_dim, num_modules)
 print("Training MoE Model")
 train_model(moe_model, train_df, covariates, treatment, outcome, epochs, batch_size)
-moe_causal_effect_estimates = predict_model(moe_model, test_df, covariates)
-test_df.loc[:, "estimated_effect"] = moe_causal_effect_estimates
-moe_estimated_effects = get_estimated_effects(test_df, test_qids)
-moe_estimated_effects_df = pd.DataFrame.from_dict(moe_estimated_effects, orient="index", columns=["estimated_effect_moe"])
-baseline_combined_df = pd.concat([baseline_combined_df, moe_estimated_effects_df], axis=1)
+moe_causal_effect_estimates_train = predict_model(moe_model, train_df, covariates)
+moe_causal_effect_estimates_test = predict_model(moe_model, test_df, covariates)
+train_df.loc[:, "estimated_effect"] = moe_causal_effect_estimates_train 
+test_df.loc[:, "estimated_effect"] = moe_causal_effect_estimates_test
+moe_estimated_effects_train = get_estimated_effects(train_df, train_qids)
+moe_estimated_effects_test = get_estimated_effects(test_df, test_qids)
+moe_estimated_effects_df_test = pd.DataFrame.from_dict(moe_estimated_effects_test, orient="index", columns=["estimated_effect_moe"])
+moe_estimated_effects_df_train = pd.DataFrame.from_dict(moe_estimated_effects_train, orient="index", columns=["estimated_effect_moe"])
+
+baseline_combined_df_train = pd.concat([baseline_combined_df_train, moe_estimated_effects_df_train], axis=1)
+baseline_combined_df_test = pd.concat([baseline_combined_df_test, moe_estimated_effects_df_test], axis=1)
 
 # Explicitly modular model+
 print("Training Additive Model")
 print(f"Training Additive Model with hidden dim: {hidden_dim}")
-additive_combined_df, module_csvs = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class)
+additive_combined_train_df, additive_combined_test_df, module_csvs = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class)
 
 
 # merge the two dataframes on index
-combined_df = pd.merge(baseline_combined_df, additive_combined_df, left_index=True, right_index=True, suffixes=("_baseline", "_additive"))
+combined_df_train = pd.merge(baseline_combined_df_train, additive_combined_train_df, left_index=True, right_index=True, suffixes=("_baseline", "_additive"))
+combined_df_test = pd.merge(baseline_combined_df_test, additive_combined_test_df, left_index=True, right_index=True, suffixes=("_baseline", "_additive"))
 
 # save the combined df
 results_csv_folder = f"{main_dir}/results/csvs"
 os.makedirs(results_csv_folder, exist_ok=True)
-combined_df.to_csv(f"{results_csv_folder}/combined_df_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
+combined_df_test.to_csv(f"{results_csv_folder}/combined_df_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
 
-print(combined_df.head())
+print(combined_df_test.head())
 
 for module_name, module_df in module_csvs.items():
     module_df.to_csv(f"{results_csv_folder}/{module_name}_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
 
 # Save Results
-pehe_baseline = pehe(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_baseline"])
-pehe_additive = pehe(combined_df["ground_truth_effect_additive"], combined_df["estimated_effect_additive"])
-pehe_moe = pehe(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_moe"])
+pehe_baseline_train = pehe(combined_df_train["ground_truth_effect_baseline"], combined_df_train["estimated_effect_baseline"])
+pehe_additive_train = pehe(combined_df_train["ground_truth_effect_additive"], combined_df_train["estimated_effect_additive"])
+pehe_moe_train = pehe(combined_df_train["ground_truth_effect_baseline"], combined_df_train["estimated_effect_moe"])
 
 
 
-r2_baseline = get_r2_score(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_baseline"])
-r2_additive = get_r2_score(combined_df["ground_truth_effect_additive"], combined_df["estimated_effect_additive"])
-r2_moe = get_r2_score(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_moe"])
+pehe_baseline_test = pehe(combined_df_test["ground_truth_effect_baseline"], combined_df_test["estimated_effect_baseline"])
+pehe_additive_test = pehe(combined_df_test["ground_truth_effect_additive"], combined_df_test["estimated_effect_additive"])
+pehe_moe_test = pehe(combined_df_test["ground_truth_effect_baseline"], combined_df_test["estimated_effect_moe"])
+
+r2_baseline_train = r2_score(combined_df_train["ground_truth_effect_baseline"], combined_df_train["estimated_effect_baseline"])
+r2_additive_train = r2_score(combined_df_train["ground_truth_effect_additive"], combined_df_train["estimated_effect_additive"])
+r2_moe_train = r2_score(combined_df_train["ground_truth_effect_baseline"], combined_df_train["estimated_effect_moe"])
+
+r2_baseline_test = r2_score(combined_df_test["ground_truth_effect_baseline"], combined_df_test["estimated_effect_baseline"])
+r2_additive_test = r2_score(combined_df_test["ground_truth_effect_additive"], combined_df_test["estimated_effect_additive"])
+r2_moe_test = r2_score(combined_df_test["ground_truth_effect_baseline"], combined_df_test["estimated_effect_moe"])
 
 
-print(f"PEHE for baseline model: {pehe_baseline}")
-print(f"PEHE for additive model: {pehe_additive}")
-print(f"PEHE for MoE model: {pehe_moe}")
+print(f"PEHE for baseline model: {pehe_baseline_test}")
+print(f"PEHE for additive model: {pehe_additive_test}")
+print(f"PEHE for MoE model: {pehe_moe_test}")
 
-print(f"R2 for baseline model: {r2_baseline}")
-print(f"R2 for additive model: {r2_additive}")
-print(f"R2 for MoE model: {r2_moe}")
+print(f"R2 for baseline model: {r2_baseline_test}")
+print(f"R2 for additive model: {r2_additive_test}")
+print(f"R2 for MoE model: {r2_moe_test}")
 
 # save the results
-results = {"pehe_baseline": pehe_baseline, "pehe_additive": pehe_additive, "pehe_moe": pehe_moe, "r2_baseline": r2_baseline, "r2_additive": r2_additive, "r2_moe": r2_moe}
+results = {"pehe_baseline": pehe_baseline_test, "pehe_additive": pehe_additive_test, "pehe_moe": pehe_moe_test, "r2_baseline": r2_baseline_test, "r2_additive": r2_additive_test, "r2_moe": r2_moe_test, "pehe_baseline_train": pehe_baseline_train, "pehe_additive_train": pehe_additive_train, "pehe_moe_train": pehe_moe_train, "r2_baseline_train": r2_baseline_train, "r2_additive_train": r2_additive_train, "r2_moe_train": r2_moe_train}
 results_path = f"{main_dir}/results/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}"
 os.makedirs(results_path, exist_ok=True)
 results_file = f"{results_path}/results_{num_modules}_{feature_dim}.json"

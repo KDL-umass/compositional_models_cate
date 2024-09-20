@@ -16,6 +16,7 @@ parser.add_argument("--run_env", type=str, default="local", help="Run environmen
 parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
 parser.add_argument("--use_subset_features", type=str, default="False", help="Use subset of features")
 parser.add_argument("--systematic", type=str, default="False", help="Use systematic features")
+parser.add_argument("--metric", type=str, default="pehe", help="Metric to plot")
 
 args = parser.parse_args()
 experiment = args.experiment
@@ -29,6 +30,7 @@ run_env = args.run_env
 underlying_model_class = args.underlying_model_class
 systematic = args.systematic
 use_subset_features = args.use_subset_features
+metric = args.metric
 # if covariates_shared == "True": 
 #     covariates_shared = True
 # else:
@@ -52,7 +54,7 @@ if experiment == "num_modules":
     varying_values = num_modules_values
 elif experiment == "feature_dim":
     if covariates_shared == "True":
-        feature_dim_values = [2, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        feature_dim_values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
     else:
         feature_dim_values = list(np.arange(2, 11))
     num_modules_values = [10]
@@ -75,11 +77,17 @@ for num_modules in num_modules_values:
             with open(results_file, 'r') as f:
                 results = json.load(f)
             
+            if metric == "pehe":
+                pehe_baseline_values.append(results['pehe_baseline'])
+                pehe_additive_values.append(results['pehe_additive'])
+                pehe_moe_values.append(results['pehe_moe'])
+            else:
+                pehe_baseline_values.append(results['r2_baseline'])
+                pehe_additive_values.append(results['r2_additive'])
+                pehe_moe_values.append(results['r2_moe'])
 
-            pehe_baseline_values.append(results['pehe_baseline'])
-            pehe_additive_values.append(results['pehe_additive'])
-            pehe_moe_values.append(results['pehe_moe'])
 
+print(len(pehe_baseline_values), len(pehe_additive_values), len(pehe_moe_values),len(varying_values))
 # # Create the plot
 plt.figure(figsize=(10, 6))
 plt.plot(varying_values, pehe_baseline_values, 'b-', label='Unitary Model')
@@ -87,16 +95,19 @@ plt.plot(varying_values, pehe_additive_values, 'r-', label='Additive Parallel Co
 plt.plot(varying_values, pehe_moe_values, 'g-', label='Mixture of Experts Model')
 
 plt.xlabel(f'{experiment}')
-plt.ylabel('PEHE (Precision in Estimation of Heterogeneous Effect)')
+if metric == "pehe":
+    plt.ylabel('PEHE (Precision in Estimation of Heterogeneous Effect)')
+else:
+    plt.ylabel('R^2')
 plt.title(f'Performance vs {experiment}')
 plt.legend()
 plt.grid(True)
 
 # Save the plot
-plot_dir = f"plots_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}"
+plot_dir = f"plots_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}"
 if not os.path.exists(plot_dir):
     os.makedirs(plot_dir)
-plot_file = f"{plot_dir}/plot_{experiment}.png"
+plot_file = f"{plot_dir}/plot_{experiment}_{metric}.png"
 
 plt.savefig(plot_file)
 plt.close()

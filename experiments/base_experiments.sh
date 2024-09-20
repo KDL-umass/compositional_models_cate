@@ -21,13 +21,13 @@ cd /work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/experim
 
 # Base command
 base_cmd="python test_base_hypothesis_1.py"
-module_function_types=("mlp" "quadratic")
-data_dists=("normal")
-feature_dim_list=(10 50)
-feature_dim_list_10=(10 20 30 40 50 60 70 80 90 100)
-# feature_dim_list_10=(2)
-num_modules_list=(1 2 3 4 5 6 7 8 9 10)
-num_modules_list_10=(1 10 20 30 40 50 60 70 80 90 100)
+module_function_types=("linear" "quadratic")
+data_dists=("normal" "uniform")
+feature_dim_list=(2 3 4 5 6 7 8 9 10)
+feature_dim_list_10=(2 10 20 30 40 50 60 70 80 90 100)
+# # feature_dim_list_10=(2)
+# num_modules_list=(1 2 3 4 5 6 7 8 9 10)
+# num_modules_list_10=(1 10 20 30 40 50 60 70 80 90 100)
 
 
 for feature_dim in ${feature_dim_list_10[@]};
@@ -43,6 +43,37 @@ do
         done
     done
 done
+
+for feature_dim in ${feature_dim_list_10[@]};
+do
+
+    # Vary module_function_type
+    for module_function_type in ${module_function_types[@]}; 
+    do
+        # Vary data_dist
+        for data_dist in ${data_dists[@]}; 
+        do
+            $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --underlying_model_class "MLP" --use_subset_features False --run_env "unity"
+        done
+    done
+done
+
+# # # Vary num_features from 2 to 10 for num_modules = 10
+for feature_dim in ${feature_dim_list[@]};
+do
+
+    # Vary module_function_type
+    for module_function_type in ${module_function_types[@]}; 
+    do
+        # Vary data_dist
+        for data_dist in ${data_dists[@]}; 
+        do
+            $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --underlying_model_class "MLP" --run_env "unity"
+        done
+    done
+done
+
+
 
 
 # # test command 
@@ -80,35 +111,6 @@ done
 
 # # Vary num_features from 2 to 100 by 10 for shared covariates
 
-
-# for feature_dim in ${feature_dim_list_10[@]};
-# do
-
-#     # Vary module_function_type
-#     for module_function_type in ${module_function_types[@]}; 
-#     do
-#         # Vary data_dist
-#         for data_dist in ${data_dists[@]}; 
-#         do
-#             $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --underlying_model_class "MLP" --use_subset_features False
-#         done
-#     done
-# done
-
-# # # # Vary num_features from 2 to 10 for num_modules = 10
-# for feature_dim in ${feature_dim_list[@]};
-# do
-
-#     # Vary module_function_type
-#     for module_function_type in ${module_function_types[@]}; 
-#     do
-#         # Vary data_dist
-#         for data_dist in ${data_dists[@]}; 
-#         do
-#             $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --underlying_model_class "MLP"
-#         done
-#     done
-# done
 
 
 
