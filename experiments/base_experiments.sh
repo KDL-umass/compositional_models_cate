@@ -8,7 +8,6 @@
 #SBATCH --job-name=test-hypothesis-1
 #SBATCH --output=./out/test-hypothesis_%j.out
 #SBATCH --error=./out/test-hypothesis_%j.err
-conda init bash
 conda activate in-context-learning
 cd /work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/experiments
 
@@ -24,8 +23,8 @@ cd /work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/experim
 base_cmd="python test_base_hypothesis_1.py"
 module_function_types=("mlp" "quadratic")
 data_dists=("normal")
-feature_dim_list=(2 3 4 5 6 7 8 9 10)
-feature_dim_list_10=(2 10 20 30 40 50 60 70 80 90 100)
+feature_dim_list=(10 50)
+feature_dim_list_10=(10 20 30 40 50 60 70 80 90 100)
 # feature_dim_list_10=(2)
 num_modules_list=(1 2 3 4 5 6 7 8 9 10)
 num_modules_list_10=(1 10 20 30 40 50 60 70 80 90 100)
@@ -40,7 +39,7 @@ do
         # Vary data_dist
         for data_dist in ${data_dists[@]}; 
         do
-            $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared False --underlying_model_class "MLP" --use_subset_features False --run_env "unity"
+            $base_cmd --num_modules 10 --num_feature_dimensions $feature_dim --module_function_type $module_function_type --data_dist $data_dist --covariates_shared True --underlying_model_class "MLP" --use_subset_features True --run_env "unity"
         done
     done
 done

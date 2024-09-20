@@ -304,6 +304,7 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
         if depth > max_depth:
             return 0.0
         module_id = node['module_id']
+        
 
         if not use_subset_features:
             inputs = node['features'] 
@@ -334,6 +335,7 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
             return 0.0
 
         module_params = module_params_dict.get(module_id, {})
+        
         output = module_function(*inputs, **module_params)
         node['output'] = output
         # total_output is the output of the module including the output of its children if composition_type is parallel

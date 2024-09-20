@@ -42,9 +42,9 @@ parser.add_argument("--underlying_model_class", type=str, default="MLP", help="M
 # run_env
 parser.add_argument("--run_env", type=str, default="local", help="Run environment")
 # use_subset_features
-parser.add_argument("--use_subset_features", type=bool, default=False, help="Use subset of features")
+parser.add_argument("--use_subset_features", type=str, default="False", help="Use subset of features")
 # generate trees systematically for creating OOD data
-parser.add_argument("--systematic", type=bool, default=False, help="Systematic tree generation")
+parser.add_argument("--systematic", type=str, default="False", help="Systematic tree generation")
 
 # parse arguments
 args = parser.parse_args()
@@ -78,6 +78,11 @@ if use_subset_features == "True":
     use_subset_features = True
 else:
     use_subset_features = False
+
+if systematic == "True":
+    systematic = True
+else:
+    systematic = False
 
 domain = "synthetic_data"
 # setup directories

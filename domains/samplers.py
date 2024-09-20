@@ -241,7 +241,7 @@ class SyntheticDataSampler:
         for i, tree in enumerate(self.input_trees):
             input_tree = tree
             # sample module parameters
-
+            
             input_processed_tree_dict, query_output = simulate_outcome(input_tree, treatment_id, self.module_functions, self.module_params_dict, self.max_depth, self.feature_dim, self.composition_type, self.use_subset_features)
             if self.composition_type == "hierarchical":
                 input_processed_tree_dict = expand_features(input_processed_tree_dict)
@@ -304,9 +304,9 @@ class SyntheticDataSampler:
             print("Generating input trees")
             self.generate_trees()
             print("Simulating potential outcomes for treatment 0")
-            self.simulate_potential_outcomes(0)
+            self.simulate_potential_outcomes(0, use_subset_features=self.use_subset_features)
             print("Simulating potential outcomes for treatment 1")
-            self.simulate_potential_outcomes(1)
+            self.simulate_potential_outcomes(1, use_subset_features=self.use_subset_features)
             self.save_csvs()
 
     def load_dataset(self, treatment_id, custom_path=None):
