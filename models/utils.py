@@ -263,6 +263,7 @@ def get_ground_truth_effects(data, qids, treatment_col='treatment_id', outcome_c
     return causal_effect_dict_test
 
 def get_estimated_effects(data, qids):
+
     estimated_effects = data.groupby("query_id")["estimated_effect"].first().to_dict()
     estimated_effects_test = {k: v for k, v in estimated_effects.items() if k in qids}
     return estimated_effects_test

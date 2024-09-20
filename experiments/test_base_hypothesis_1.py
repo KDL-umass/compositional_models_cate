@@ -16,15 +16,15 @@ warnings.filterwarnings('ignore')
 
 # Define the argument parser
 parser = argparse.ArgumentParser(description="Train modular neural network architectures and baselines for causal effect estimation")
-parser.add_argument("--num_modules", type=int, default=10, help="Number of modules")
-parser.add_argument("--num_feature_dimensions", type=int, default=6, help="Number of feature dimensions")
+parser.add_argument("--num_modules", type=int, default=5, help="Number of modules")
+parser.add_argument("--num_feature_dimensions", type=int, default=30, help="Number of feature dimensions")
 parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
-parser.add_argument("--module_function_type", type=str, default="linear", help="Module function type")
+parser.add_argument("--module_function_type", type=str, default="mlp", help="Module function type")
 parser.add_argument("--composition_type", type=str, default="parallel", help="Composition type")
 parser.add_argument("--resample", type=bool, default=True, help="Resample data")
 parser.add_argument("--seed", type=int, default=42, help="Seed for reproducibility")
 parser.add_argument("--fixed_structure", type=bool, default=True, help="Fixed structure flag")
-parser.add_argument("--data_dist", type=str, default="uniform", help="Data distribution")
+parser.add_argument("--data_dist", type=str, default="normal", help="Data distribution")
 parser.add_argument("--heterogeneity", type=float, default=1.0, help="Heterogeneity")
 parser.add_argument("--split_type", type=str, default="iid", help="Split type")
 # hidden_dim
@@ -36,13 +36,13 @@ parser.add_argument("--batch_size", type=int, default=64, help="Batch size")
 # output_dim
 parser.add_argument("--output_dim", type=int, default=1, help="Output dimension")
 # covariates_shared
-parser.add_argument("--covariates_shared", type=str, default="False", help="Covariates shared")
+parser.add_argument("--covariates_shared", type=str, default="True", help="Covariates shared")
 # model_class
 parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
 # run_env
 parser.add_argument("--run_env", type=str, default="local", help="Run environment")
 # use_subset_features
-parser.add_argument("--use_subset_features", type=str, default="False", help="Use subset of features")
+parser.add_argument("--use_subset_features", type=str, default="True", help="Use subset of features")
 # generate trees systematically for creating OOD data
 parser.add_argument("--systematic", type=str, default="False", help="Systematic tree generation")
 
@@ -129,13 +129,15 @@ else:
     covariates = [x for x in train_df.columns if "feature" in x]
 treatment = "treatment_id"
 outcome = "query_output"
+baseline_causal_effect_dict_test = get_ground_truth_effects(data, test_qids)
+# # X_test = test_df[covariates].values
+# if args.split_type == "iid":
+#     test_df = train_df
+#     test_qids = train_qids
 
-# X_test = test_df[covariates].values
-if args.split_type == "iid":
-    test_df = train_df
+
 
 input_dim = len(covariates)
-
 if underlying_model_class == "MLP":
     # make sure hidden dim is greater than input dim
     baseline_model = BaselineModel(input_dim + 1, (input_dim + 1)*2, output_dim)
@@ -146,8 +148,7 @@ print("Training Baseline Model")
 baseline_model, train_losses, val_losses = train_model(baseline_model, train_df, covariates, treatment, outcome, epochs, batch_size)
 causal_effect_estimates = predict_model(baseline_model, test_df, covariates)
 test_df.loc[:, "estimated_effect"] = causal_effect_estimates
-baseline_estimated_effects = get_estimated_effects(test_df, train_qids)
-baseline_causal_effect_dict_test = get_ground_truth_effects(data, train_qids)
+baseline_estimated_effects = get_estimated_effects(test_df, test_qids)
 
 # have combined df with ground truth and estimated effects based on the query_id
 baseline_combined_df = pd.DataFrame.from_dict(baseline_causal_effect_dict_test, orient="index", columns=["ground_truth_effect"])
@@ -166,7 +167,7 @@ print("Training MoE Model")
 train_model(moe_model, train_df, covariates, treatment, outcome, epochs, batch_size)
 moe_causal_effect_estimates = predict_model(moe_model, test_df, covariates)
 test_df.loc[:, "estimated_effect"] = moe_causal_effect_estimates
-moe_estimated_effects = get_estimated_effects(test_df, train_qids)
+moe_estimated_effects = get_estimated_effects(test_df, test_qids)
 moe_estimated_effects_df = pd.DataFrame.from_dict(moe_estimated_effects, orient="index", columns=["estimated_effect_moe"])
 baseline_combined_df = pd.concat([baseline_combined_df, moe_estimated_effects_df], axis=1)
 
@@ -184,6 +185,7 @@ results_csv_folder = f"{main_dir}/results/csvs"
 os.makedirs(results_csv_folder, exist_ok=True)
 combined_df.to_csv(f"{results_csv_folder}/combined_df_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
 
+print(combined_df.head())
 
 for module_name, module_df in module_csvs.items():
     module_df.to_csv(f"{results_csv_folder}/{module_name}_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
@@ -203,6 +205,10 @@ r2_moe = get_r2_score(combined_df["ground_truth_effect_baseline"], combined_df["
 print(f"PEHE for baseline model: {pehe_baseline}")
 print(f"PEHE for additive model: {pehe_additive}")
 print(f"PEHE for MoE model: {pehe_moe}")
+
+print(f"R2 for baseline model: {r2_baseline}")
+print(f"R2 for additive model: {r2_additive}")
+print(f"R2 for MoE model: {r2_moe}")
 
 # save the results
 results = {"pehe_baseline": pehe_baseline, "pehe_additive": pehe_additive, "pehe_moe": pehe_moe, "r2_baseline": r2_baseline, "r2_additive": r2_additive, "r2_moe": r2_moe}

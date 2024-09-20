@@ -12,6 +12,149 @@ import torch
 import torch.nn as nn
 from itertools import combinations
 
+def generate_feature(feature_dim=3, data_dist="uniform"):
+    if data_dist == "normal":
+        means = np.random.uniform(0, 1, feature_dim)
+        covs = np.random.uniform(0, 3, (feature_dim, feature_dim))
+        covs = covs @ covs.T + np.eye(feature_dim)
+        feature = np.random.multivariate_normal(means, covs)
+    elif data_dist == "uniform":
+        feature = np.random.uniform(0, 1, feature_dim)
+    return feature
+
+def build_tree_systematically(modules, depth, used_modules, data_dist="uniform", covariates_shared=False, input_features=None, feature_dim=3, max_depth=5):
+    
+    if used_modules is None:
+        used_modules = set()
+    
+    unused_modules = set(modules) - used_modules
+    if not unused_modules:
+        return None
+    
+    module_id = random.choice(list(unused_modules))
+    if covariates_shared:
+        feature = input_features
+    else:
+        feature = generate_feature(data_dist=data_dist, feature_dim=feature_dim)
+    used_modules.add(module_id)
+    
+    if depth >= max_depth or len(used_modules) == len(modules):
+        return Node(module_id, module_id, feature.tolist())
+    
+    child_node = build_tree_systematically(modules, depth + 1, used_modules, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, feature_dim=feature_dim, max_depth=max_depth)
+    children = [child_node] if child_node else []
+    
+    return Node(module_id, module_id, feature.tolist(), children=children)
+
+def build_tree_random(module_id, depth, data_dist="uniform", covariates_shared=False, input_features=None, num_modules=10, max_depth=5):
+    """
+    Recursively build an input tree.
+
+    Args:
+        module_id (int): The ID of the current module.
+        depth (int): The depth of the current node in the tree.
+
+    Returns:
+        Node: The input tree represented as a Node object.
+    """
+    if covariates_shared:
+        feature = input_features
+    else:
+        feature = generate_feature(data_dist=data_dist, feature_dim=feature_dim)
+    if depth >= max_depth or (random.random() < 0.2 and depth > 3):
+        return Node(module_id, module_id, feature.tolist())
+
+    children = []
+    child_module_id = random.randint(1,num_modules)
+    child_node = build_tree_random(child_module_id, depth + 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth)
+    children.append(child_node)
+    return Node(module_id, module_id, feature.tolist(), children=children)
+
+
+def build_tree_exactly_once(module_id, depth, used_modules, data_dist="uniform", covariates_shared=False, input_features=None, num_modules=10, max_depth=5):
+    # print("module_id: ", module_id)
+    used_modules.add(module_id)
+    # print("used_modules: ", used_modules)
+    """
+    Recursively build an input tree with each module appearing exactly once.
+
+    Args:
+        module_id (int): The ID of the current module.
+        depth (int): The depth of the current node in the tree.
+        used_modules (set): A set of module IDs that have already been used in the tree.
+
+    Returns:
+        Node: The input tree represented as a Node object.
+    """
+    if covariates_shared:
+        feature = input_features
+    else:
+        feature = generate_feature(data_dist=data_dist, feature_dim=feature_dim)
+    
+    # end tree if max depth is reached or all modules are used or randomly choose to end tree
+    if depth >= max_depth or len(used_modules) == num_modules:
+        return Node(module_id, module_id, feature.tolist())
+
+    children = []
+    unused_modules = set(range(1, num_modules + 1)) - used_modules - {module_id}
+    # print("unused_modules: ", unused_modules)
+    if len(unused_modules) != 0:
+        child_module_id = random.choice(list(unused_modules))
+        used_modules.add(child_module_id)
+        child_node = build_tree_exactly_once(child_module_id, depth + 1, used_modules, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth)
+        children.append(child_node)
+
+    return Node(module_id, module_id, feature.tolist(), children=children)
+
+def generate_fixed_variable_structure_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, data_dist="uniform", covariates_shared=False, fixed_structure=True):
+    # Generate a desired number of input trees
+    input_trees = []
+    for i in range(num_trees):
+        # print("Tree: ", _)
+        root_module_id = random.randint(1, num_modules)
+        input_features = generate_feature(data_dist=data_dist, feature_dim=feature_dim)
+            
+        if fixed_structure:
+            # print("Generating trees with each module appearing exactly once.")
+            input_trees.append(build_tree_exactly_once(root_module_id, 1, set(), data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth))
+        else:
+            # print("Generating trees with modules appearing multiple times.")
+            input_trees.append(build_tree_random(root_module_id, 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, num_modules=num_modules, max_depth=max_depth))
+
+
+    return input_trees
+
+def generate_systematic_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, data_dist="uniform", covariates_shared=False, systematic=False, trees_per_group=100):
+    grouped_trees = {}
+    all_modules = list(range(1, num_modules + 1))
+    
+    for group_size in range(2, num_modules + 1):
+        print(f"Generating trees for group size: {group_size}")
+        group_trees = []
+        combinations_list = list(combinations(all_modules, group_size))
+        print(f"Number of combinations: {len(combinations_list)}")
+        trees_per_combination = trees_per_group // len(combinations_list)
+        
+        for module_combination in combinations_list:
+            for _ in range(trees_per_combination):
+                input_features = generate_feature(data_dist=data_dist, feature_dim=feature_dim)
+                
+                tree = build_tree_systematically(module_combination, 1, set(), data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, feature_dim=feature_dim, max_depth=max_depth)
+                if tree:
+                    group_trees.append(tree)
+        
+        grouped_trees[group_size] = group_trees
+
+        # count the total number of trees
+        total_trees = sum(len(trees) for trees in grouped_trees.values())
+        # print tree for each group size
+        for group_size, trees in grouped_trees.items():
+            print(f"Group size: {group_size}, Number of trees: {len(trees)}")
+        # have a single list of trees
+        input_trees = [tree for trees in grouped_trees.values() for tree in trees]
+    
+    return input_trees
+
 def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, fixed_structure=False, data_dist="uniform", covariates_shared=False, systematic=False, trees_per_group=100):
     """
     Generate different input structures in the form of trees.
@@ -27,124 +170,12 @@ def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, ma
         """
     random.seed(seed)
     np.random.seed(seed)
-    input_trees = []
-    module_means = {}
-    module_covs = {}
 
-    def build_tree(module_id, depth, data_dist="uniform", covariates_shared=False, input_features=None):
-        """
-        Recursively build an input tree.
-
-        Args:
-            module_id (int): The ID of the current module.
-            depth (int): The depth of the current node in the tree.
-
-        Returns:
-            Node: The input tree represented as a Node object.
-        """
-        # # Sample mean and covariance for the module's features if not already done
-        # if module_id not in module_means:
-        #     module_means[module_id] = np.random.uniform(0, 1, feature_dim)
-        #     module_covs[module_id] = np.random.uniform(0, 3, (feature_dim, feature_dim))
-        #     module_covs[module_id] = module_covs[module_id] @ module_covs[module_id].T + np.eye(feature_dim)
-
-        # feature = np.random.multivariate_normal(module_means[module_id], module_covs[module_id])
-        # feature = np.random.uniform(0, 1, feature_dim)
-        # sample features with different means and covariance
-        # feature = np.random.multivariate_normal(module_means[module_id], module_covs[module_id])
-        # if data_dist == "normal":
-        #     means = np.random.uniform(0, 1, feature_dim)
-        #     covs = np.random.uniform(0, 3, (feature_dim, feature_dim))
-        #     covs = covs @ covs.T + np.eye(feature_dim)
-        #     feature = np.random.multivariate_normal(means, covs)
-        if data_dist == "uniform":
-            if not covariates_shared:
-                feature = np.random.uniform(0, 1, feature_dim)
-            else:
-                feature = input_features
-        if depth >= max_depth or (random.random() < 0.2 and depth > 3):
-            return Node(module_id, module_id, feature.tolist())
-
-        children = []
-        child_module_id = random.randint(1,num_modules)
-        child_node = build_tree(child_module_id, depth + 1, data_dist=data_dist)
-        children.append(child_node)
-        return Node(module_id, module_id, feature.tolist(), children=children)
-
-    def build_tree_exactly_once(module_id, depth, used_modules, data_dist="uniform", covariates_shared=False, input_features=None):
-        # print("module_id: ", module_id)
-        used_modules.add(module_id)
-        # print("used_modules: ", used_modules)
-        """
-        Recursively build an input tree with each module appearing exactly once.
-
-        Args:
-            module_id (int): The ID of the current module.
-            depth (int): The depth of the current node in the tree.
-            used_modules (set): A set of module IDs that have already been used in the tree.
-
-        Returns:
-            Node: The input tree represented as a Node object.
-        """
-        # # Sample mean and covariance for the module's features if not already done
-        # if module_id not in module_means:
-        #     module_means[module_id] = np.random.uniform(0, 1, feature_dim)
-        #     module_covs[module_id] = np.random.uniform(0, 3, (feature_dim, feature_dim))
-        #     module_covs[module_id] = module_covs[module_id] @ module_covs[module_id].T + np.eye(feature_dim)
-
-        # feature = np.random.multivariate_normal(module_means[module_id], module_covs[module_id])
-        if data_dist == "normal":
-            if not covariates_shared:
-                means = np.random.uniform(0, 1, feature_dim)
-                covs = np.random.uniform(0, 3, (feature_dim, feature_dim))
-                covs = covs @ covs.T + np.eye(feature_dim)
-                feature = np.random.multivariate_normal(means, covs)
-            else:
-                feature = input_features
-        elif data_dist == "uniform":
-            if not covariates_shared:
-                feature = np.random.uniform(0, 1, feature_dim)
-            else:
-                feature = input_features
-        
-        # end tree if max depth is reached or all modules are used or randomly choose to end tree
-        if depth >= max_depth or len(used_modules) == num_modules:
-            return Node(module_id, module_id, feature.tolist())
-
-        children = []
-        unused_modules = set(range(1, num_modules + 1)) - used_modules - {module_id}
-        # print("unused_modules: ", unused_modules)
-        if len(unused_modules) != 0:
-            child_module_id = random.choice(list(unused_modules))
-            used_modules.add(child_module_id)
-            child_node = build_tree_exactly_once(child_module_id, depth + 1, used_modules, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features)
-            children.append(child_node)
-
-        return Node(module_id, module_id, feature.tolist(), children=children)
-
-    # Generate a desired number of input trees
-    for i in range(num_trees):
-        # print("Tree: ", _)
-        root_module_id = random.randint(1, num_modules)
-        if covariates_shared:
-            if data_dist == "uniform":
-                input_features = np.random.uniform(0, 1, feature_dim)
-            elif data_dist == "normal":
-                means = np.random.uniform(0, 1, feature_dim)
-                covs = np.random.uniform(0, 3, (feature_dim, feature_dim))
-                covs = covs @ covs.T + np.eye(feature_dim)
-                input_features = np.random.multivariate_normal(means, covs)
-        else:
-            input_features = None
-            
-        if fixed_structure:
-            # print("Generating trees with each module appearing exactly once.")
-            input_trees.append(build_tree_exactly_once(root_module_id, 1, set(), data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features))
-        else:
-            # print("Generating trees with modules appearing multiple times.")
-            input_trees.append(build_tree(root_module_id, 1, data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features))
-
-
+    if systematic:
+        input_trees = generate_systematic_trees(num_modules, feature_dim=feature_dim, seed=seed, num_trees=num_trees, max_depth=max_depth, data_dist=data_dist, covariates_shared=covariates_shared, systematic=systematic, trees_per_group=trees_per_group)
+    else:
+        input_trees =  generate_fixed_variable_structure_trees(num_modules, feature_dim=feature_dim, seed=seed, num_trees=num_trees, max_depth=max_depth, data_dist=data_dist, covariates_shared=covariates_shared, fixed_structure=fixed_structure)
+    print(f"Number of input trees generated: {len(input_trees)}")
     return input_trees
 
 # def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, max_depth=5, 
@@ -318,6 +349,7 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
             # get the index of the last feature for the current module
             end_index = start_index + num_features_per_module
             inputs = node['features'][start_index:end_index]
+            
             
 
         if composition_type == "hierarchical":

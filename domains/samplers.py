@@ -1,3 +1,5 @@
+import sys 
+sys.path.append("../")
 from domains.data_utils import generate_input_trees, simulate_outcome, process_trees_and_create_csvs, expand_features, observational_sampling
 from domains.tree_data_structures import Node, ExpressionNode, QueryPlanNode
 import numpy as np
@@ -157,6 +159,7 @@ class SyntheticDataSampler:
         
         # Generate a base set of weights
         np.random.seed(base_seed)
+        
         if not self.use_subset_features:
             base_weights = np.random.uniform(0, 1, 2 * (self.feature_dim) + 1)
             module_feature_dim = self.feature_dim
@@ -174,6 +177,8 @@ class SyntheticDataSampler:
         # Define the MLP architecture if needed
         if self.module_type == 'mlp':
             input_dim = module_feature_dim
+            
+
             hidden_dim1 = 2 * input_dim
             hidden_dim2 = 2 * input_dim
             output_dim = 1
@@ -816,18 +821,39 @@ if __name__ == "__main__":
 
     # # test the synthetic data sampler
     num_modules = 10
-    feature_dim = 6
+    feature_dim = 3
     composition_type = "parallel"
-    fixed_structure = False
+    fixed_structure = True
     max_depth = num_modules
     num_trees = 5000
     seed = 42
+    module_function_type = "mlp"
+    resample = True
+    covariates_shared = True
+    use_subset_features = False
+    run_env = "local"
+    heterogeneity = 1
     data_dist = "uniform"
     systematic = True
-
-    module_function_type_list = ["linear_module"]
-    sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type_list, systematic=sysetamtic)
+    domain = "synthetic_data"
+    sampler = SyntheticDataSampler(num_modules=num_modules, feature_dim=feature_dim, composition_type=composition_type, fixed_structure=fixed_structure, max_depth=max_depth, num_trees=num_trees, seed=seed, module_function_type=module_function_type, resample=resample, covariates_shared=covariates_shared, use_subset_features=use_subset_features, run_env=run_env, heterogeneity=heterogeneity, data_dist=data_dist, systematic=systematic)
     sampler.simulate_data()
+
+    if run_env == "local":
+        base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+    else:
+        base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
+
+    main_dir = f"{base_dir}/{domain}"
+    csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
+    obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
+    data_path = f"{csv_path}/{domain}_data_high_level_features.csv"
+    data = pd.read_csv(data_path)
+
+    # print unique values of tree depth
+    print(data["tree_depth"].unique())
+
+
 
     # # test the maths evaluation data sampler
     # data_sampler = MathsEvaluationDataSampler()
