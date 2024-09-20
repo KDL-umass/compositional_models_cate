@@ -42,7 +42,7 @@ parser.add_argument("--underlying_model_class", type=str, default="MLP", help="M
 # run_env
 parser.add_argument("--run_env", type=str, default="local", help="Run environment")
 # use_subset_features
-parser.add_argument("--use_subset_features", type=bool, default=True, help="Use subset of features")
+parser.add_argument("--use_subset_features", type=bool, default=False, help="Use subset of features")
 # generate trees systematically for creating OOD data
 parser.add_argument("--systematic", type=bool, default=False, help="Systematic tree generation")
 
@@ -89,11 +89,11 @@ else:
     base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
 
 main_dir = f"{base_dir}/{domain}"
-csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}"
-obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}"
+csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
+obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
 
 # simulate data
-sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type, resample=resample,heterogeneity=args.heterogeneity, covariates_shared=covariates_shared, use_subset_features=use_subset_features,systematic=systematic)
+sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type, resample=resample,heterogeneity=args.heterogeneity, covariates_shared=covariates_shared, use_subset_features=use_subset_features,systematic=systematic, run_env=run_env)
 sampler.simulate_data()
 
 # read the data
@@ -170,9 +170,6 @@ print("Training Additive Model")
 print(f"Training Additive Model with hidden dim: {hidden_dim}")
 additive_combined_df, module_csvs = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class)
 
-for module_name, module_df in module_csvs.items():
-    module_df.to_csv(f"{main_dir}/results/csvs/{module_name}.csv")
-# combine the two dataframes: baseline_combined_df and additive_combined_df on query_id
 
 # merge the two dataframes on index
 combined_df = pd.merge(baseline_combined_df, additive_combined_df, left_index=True, right_index=True, suffixes=("_baseline", "_additive"))
@@ -182,6 +179,9 @@ results_csv_folder = f"{main_dir}/results/csvs"
 os.makedirs(results_csv_folder, exist_ok=True)
 combined_df.to_csv(f"{results_csv_folder}/combined_df_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
 
+
+for module_name, module_df in module_csvs.items():
+    module_df.to_csv(f"{results_csv_folder}/{module_name}_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}.csv")
 
 # Save Results
 pehe_baseline = pehe(combined_df["ground_truth_effect_baseline"], combined_df["estimated_effect_baseline"])

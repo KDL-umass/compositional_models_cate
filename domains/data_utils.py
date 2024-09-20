@@ -461,23 +461,33 @@ def process_tree(node, treatment_id, csv_data, query_id, module_feature_names):
 
     return module_feature_names
 
-def process_trees_and_create_module_csvs(data_folders, csv_folder):
+def process_trees_and_create_module_csvs(data_folders, csv_folder, source="processed"):
     csv_data = {}
     module_feature_names = {}
     all_modules = set()
+    if source == "json":
+        for folder in data_folders:
+            for filename in os.listdir(folder):
+                if filename.endswith(".jsonl"):
+                    file_path = os.path.join(folder, filename)
+                    
+                    with open(file_path, "r") as file:
+                        for line in file:
+                            json_tree = json.loads(line)
+                            treatment_id = json_tree["treatment_id"]
+                            query_id = json_tree["query_id"]
+                            tree = json_tree["json_tree"]
 
-    for folder in data_folders:
-        for filename in os.listdir(folder):
-            if filename.endswith(".json"):
-                file_path = os.path.join(folder, filename)
-                
-                with open(file_path, "r") as file:
-                    json_tree = json.load(file)
-                    treatment_id = json_tree["treatment_id"]
-                    query_id = json_tree["query_id"]
-                    tree = json_tree["json_tree"]
+                            process_tree(tree, treatment_id, csv_data, query_id, module_feature_names)
+                            all_modules.update(csv_data.keys())
+    elif source == "processed":
+        for i, treatment_tree_dicts in enumerate(data_folders):
+            for input_dict in treatment_tree_dicts:
+                treatment_id = input_dict["treatment_id"]
+                query_id = input_dict["query_id"]
+                tree = input_dict["json_tree"]
 
-                module_feature_names = process_tree(tree, treatment_id, csv_data, query_id, module_feature_names)
+                process_tree(tree, treatment_id, csv_data, query_id, module_feature_names)
                 all_modules.update(csv_data.keys())
 
     # Write CSV data to files for each module
@@ -498,37 +508,63 @@ def process_trees_and_create_module_csvs(data_folders, csv_folder):
     return sorted_module_names, module_feature_names, module_feature_counts
 
 
-def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence=False, domain="synthetic_data"):
+def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence=False, domain="synthetic_data", source="processed"):
     high_level_data = []
 
-    for folder in data_folders:
-        for filename in os.listdir(folder):
-            if filename.endswith(".json"):
-                file_path = os.path.join(folder, filename)
-                
-                with open(file_path, "r") as file:
-                    json_tree = json.load(file)
-                    treatment_id = json_tree["treatment_id"]
-                    query_id = json_tree["query_id"]
-                    query_output = json_tree["query_output"]
-                    tree = json_tree["json_tree"]
-                    # get tree depth 
-                    # first convert the tree to a Node object which depends on the domain
-                    if domain == "maths_evaluation":
-                        tree_node = ExpressionNode.from_dict(tree)
-                    elif domain == "query_execution":
-                        tree_node = QueryPlanNode.from_dict(tree)
-                    elif domain == "synthetic_data":
-                        tree_node = Node.from_dict(tree)
+    if source == "json":
+        for folder in data_folders:
+            for filename in os.listdir(folder):
+                if filename.endswith(".json"):
+                    file_path = os.path.join(folder, filename)
                     
-                    tree_depth = tree_node.get_depth()
+                    with open(file_path, "r") as file:
+                        json_tree = json.load(file)
+                        treatment_id = json_tree["treatment_id"]
+                        query_id = json_tree["query_id"]
+                        query_output = json_tree["query_output"]
+                        tree = json_tree["json_tree"]
+                        # get tree depth 
+                        # first convert the tree to a Node object which depends on the domain
+                        if domain == "maths_evaluation":
+                            tree_node = ExpressionNode.from_dict(tree)
+                        elif domain == "query_execution":
+                            tree_node = QueryPlanNode.from_dict(tree)
+                        elif domain == "synthetic_data":
+                            tree_node = Node.from_dict(tree)
+                        
+                        tree_depth = tree_node.get_depth()
+
+                    high_level_row = process_high_level_features(tree, query_id, treatment_id, tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence)
+                    
+                    if domain == "maths_evaluation":
+                        matrix_size = int(query_id.split("_")[1])
+                        high_level_row.append(matrix_size)
+
+                    high_level_data.append(high_level_row)
+    elif source == "processed":
+        for i, treatment_tree_dicts in enumerate(data_folders):
+            for input_dict in treatment_tree_dicts:
+                treatment_id = input_dict["treatment_id"]
+                query_id = input_dict["query_id"]
+                query_output = input_dict["query_output"]
+                tree = input_dict["json_tree"]
+                # get tree depth 
+                # first convert the tree to a Node object which depends on the domain
+                if domain == "maths_evaluation":
+                    tree_node = ExpressionNode.from_dict(tree)
+                elif domain == "query_execution":
+                    tree_node = QueryPlanNode.from_dict(tree)
+                elif domain == "synthetic_data":
+                    tree_node = Node.from_dict(tree)
+                
+                tree_depth = tree_node.get_depth()
 
                 high_level_row = process_high_level_features(tree, query_id, treatment_id, tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence)
-                
+
                 if domain == "maths_evaluation":
                     matrix_size = int(query_id.split("_")[1])
                     high_level_row.append(matrix_size)
-
+                
                 high_level_data.append(high_level_row)
 
     # Write the high-level CSV
@@ -546,11 +582,11 @@ def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_mod
         writer.writerow(columns)
         writer.writerows(high_level_data)
 
-def process_trees_and_create_csvs(data_folders, csv_folder, config_folder, exactly_one_occurrence=False, domain="synthetic_data"):
+def process_trees_and_create_csvs(data_folders, csv_folder, config_folder, exactly_one_occurrence=False, domain="synthetic_data", source="processed"):
     # first process the trees and create module csvs
-    sorted_module_names, module_feature_names, module_feature_counts = process_trees_and_create_module_csvs(data_folders, csv_folder)
+    sorted_module_names, module_feature_names, module_feature_counts = process_trees_and_create_module_csvs(data_folders, csv_folder, source=source)
     # then process the trees and create high level csv
-    process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence, domain=domain)
+    process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence, domain=domain, source=source)
 
     # create a config file with the domain name and save module names and feature names and feature counts
     config = {}

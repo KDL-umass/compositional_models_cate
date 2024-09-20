@@ -115,14 +115,14 @@ class SyntheticDataSampler:
             if self.resample:
                 print("Reinitializing path 0")
                 shutil.rmtree(self.path_0)
-                os.makedirs(self.path_0)
+                os.makedirs(self.path_0, exist_ok=True)
         if not os.path.exists(self.path_1):
             os.makedirs(self.path_1)
         else:
             if self.resample:
                 print("Reinitializing path 1")
                 shutil.rmtree(self.path_1)
-                os.makedirs(self.path_1)
+                os.makedirs(self.path_1, exist_ok=True)
 
         self.csv_folder = "{}/{}/csvs/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
         if not os.path.exists(self.csv_folder):
@@ -131,7 +131,7 @@ class SyntheticDataSampler:
             if self.resample:
                 print("Reinitializing csv folder")
                 shutil.rmtree(self.csv_folder)
-                os.makedirs(self.csv_folder)
+                os.makedirs(self.csv_folder, exist_ok=True)
         self.json_folders = [self.path_0, self.path_1]
 
         self.obs_csv_folder = "{}/{}/observational_data/fixed_structure_{}_outcomes_{}_systematic_{}".format(self.base_dir, self.domain, self.fixed_structure, self.composition_type, self.systematic)
@@ -148,6 +148,7 @@ class SyntheticDataSampler:
 
 
     def generate_trees(self):
+        print("Generating input trees")
         self.input_trees = generate_input_trees(self.num_modules, self.feature_dim, self.seed, self.num_trees, self.max_depth, self.fixed_structure, self.data_dist, self.covariates_shared, self.systematic, self.trees_per_group)
         
         
@@ -217,8 +218,7 @@ class SyntheticDataSampler:
             elif self.module_type == 'mlp':
                 self.module_params_dict[module_id] = {"model": model}
 
-    def simulate_potential_outcomes(self, treatment_id, use_subset_features = False):
-        self.generate_trees()
+    def simulate_potential_outcomes(self, treatment_id, use_subset_features = False, batch_size=10000):
         module_functions = {}
         for module_id in range(1, self.num_modules + 1):
             if self.module_type == 'linear':
@@ -231,6 +231,13 @@ class SyntheticDataSampler:
             module_functions[module_id] = module_function
         self.module_functions = module_functions
         self.generate_module_weights(treatment_id)
+        batch = []
+        batch_counter = 0
+        file_counter = 0
+        if treatment_id == 0:
+            self.processed_trees_0 = []
+        else:
+            self.processed_trees_1 = []
         for i, tree in enumerate(self.input_trees):
             input_tree = tree
             # sample module parameters
@@ -249,22 +256,58 @@ class SyntheticDataSampler:
             input_dict["query_output"] = query_output
             input_dict["feature_dim"] = self.feature_dim
             if treatment_id == 0:
-                path = self.path_0
+                self.processed_trees_0.append(input_dict)
             else:
-                path = self.path_1
+                self.processed_trees_1.append(input_dict)
+            # if treatment_id == 0:
+            #     path = self.path_0
+            # else:
+            #     path = self.path_1
+            
+            # batch.append(input_dict)
+            # batch_counter += 1
+            
+            # if batch_counter >= batch_size:
+            #     self._save_batch(batch, treatment_id, file_counter)
+            #     batch = []
+            #     batch_counter = 0
+            #     file_counter += 1
+        
+            # # Save any remaining items in the last batch
+            # if len(batch) > 0:
+            #     self._save_batch(batch, treatment_id, file_counter)
+
+    # def _save_batch(self, batch, treatment_id, file_counter):
+    #     path = self.path_0 if treatment_id == 0 else self.path_1
+    #     filename = f"{path}/batch_{file_counter}.jsonl"
+        
+    #     with open(filename, 'w') as f:
+    #         for item in batch:
+    #             json.dump(item, f)
+    #             f.write('\n')
+        
+        # batch save the input trees
+            
 
             
-            with open("{}/input_tree_{}.json".format(path, i), "w") as f:
-                json.dump(input_dict, f, indent=4)
-        
-
-    def save_csvs(self):
-        process_trees_and_create_csvs(self.json_folders, self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain)
+            # with open("{}/input_tree_{}.json".format(path, i), "w") as f:
+            #     json.dump(input_dict, f, indent=4)
+    def save_csvs(self, source="processed"):
+        if source == "json":
+            process_trees_and_create_csvs(self.json_folders, self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain, source="json")
+        elif source == "processed":
+            process_trees_and_create_csvs([self.processed_trees_0, self.processed_trees_1], self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain,source="processed")
 
     def simulate_data(self):
-        self.simulate_potential_outcomes(0)
-        self.simulate_potential_outcomes(1)
-        self.save_csvs()
+        if self.resample:
+            print("Resampling data")
+            print("Generating input trees")
+            self.generate_trees()
+            print("Simulating potential outcomes for treatment 0")
+            self.simulate_potential_outcomes(0)
+            print("Simulating potential outcomes for treatment 1")
+            self.simulate_potential_outcomes(1)
+            self.save_csvs()
 
     def load_dataset(self, treatment_id, custom_path=None):
         self.input_trees_dict[treatment_id] = []

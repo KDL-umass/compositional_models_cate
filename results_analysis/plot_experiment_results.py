@@ -14,6 +14,8 @@ parser.add_argument("--composition_type", type=str, default="parallel", help="Co
 parser.add_argument("--covariates_shared", type=str, default="False", help="Covariates shared")
 parser.add_argument("--run_env", type=str, default="local", help="Run environment")
 parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
+parser.add_argument("--use_subset_features", type=str, default="False", help="Use subset of features")
+parser.add_argument("--systematic", type=str, default="False", help="Use systematic features")
 
 args = parser.parse_args()
 experiment = args.experiment
@@ -25,6 +27,8 @@ composition_type = args.composition_type
 covariates_shared = args.covariates_shared
 run_env = args.run_env
 underlying_model_class = args.underlying_model_class
+systematic = args.systematic
+use_subset_features = args.use_subset_features
 # if covariates_shared == "True": 
 #     covariates_shared = True
 # else:
@@ -35,7 +39,7 @@ else:
     base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
 
 
-results_path = f"{base_dir}/synthetic_data/results/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}"
+results_path = f"{base_dir}/synthetic_data/results/results_{data_dist}_{module_function_type}_{composition_type}_covariates_shared_{covariates_shared}_underlying_model_{underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{systematic}"
 
 # Lists to store the data for plotting
 # heterogeneity_values = []
@@ -72,9 +76,9 @@ for num_modules in num_modules_values:
                 results = json.load(f)
             
 
-            pehe_baseline_values.append(results['r2_baseline'])
-            pehe_additive_values.append(results['r2_additive'])
-            pehe_moe_values.append(results['r2_moe'])
+            pehe_baseline_values.append(results['pehe_baseline'])
+            pehe_additive_values.append(results['pehe_additive'])
+            pehe_moe_values.append(results['pehe_moe'])
 
 # # Create the plot
 plt.figure(figsize=(10, 6))

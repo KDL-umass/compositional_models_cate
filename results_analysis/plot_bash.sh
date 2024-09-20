@@ -1,10 +1,10 @@
 #!/bin/bash
 
 base_cmd="python plot_experiment_results.py"
-experiments=("num_modules" "feature_dim")
-data_dists=("normal" "uniform")
-module_function_types=("linear" "quadratic", "mlp")
-covariates_shared=("True" "False")
+experiments=("feature_dim")
+data_dists=("normal")
+module_function_types=("quadratic", "mlp")
+covariates_shared=("True")
 
 for experiment in ${experiments[@]};
 do
@@ -14,7 +14,8 @@ do
         do
             for covariate_shared in ${covariates_shared[@]};
             do
-                $base_cmd --experiment $experiment --data_dist $data_dist --module_function_type $module_function_type --covariates_shared $covariate_shared
+                $base_cmd --experiment $experiment --data_dist $data_dist --module_function_type $module_function_type --covariates_shared $covariate_shared --covariates_shared True --underlying_model_class "MLP" --use_subset_features True --run_env "unity"
+       
             done
         done
     done

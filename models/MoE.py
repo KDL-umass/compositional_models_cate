@@ -124,6 +124,11 @@ def create_expert_linear_model(input_dim, output_dim):
     return model
 
 def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, val_df=None, plot=False):
+    # use cuda if available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Training the model on {device}")
+    model.to(device)
+
     # shuffle the training data
     train_df = train_df.sample(frac=1).reset_index(drop=True)
     X = train_df[covariates].values
@@ -134,8 +139,8 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     loss_fn = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     
-    X_T = torch.tensor(X_T, dtype=torch.float32)
-    Y = torch.tensor(Y, dtype=torch.float32).reshape(-1, 1)
+    X_T = torch.tensor(X_T, dtype=torch.float32).to(device)
+    Y = torch.tensor(Y, dtype=torch.float32).reshape(-1, 1).to(device)
     
     # Prepare validation data if provided
     if val_df is not None:
@@ -194,16 +199,18 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     return model, train_losses, val_losses
 # Prediction function for both models
 def predict_model(model, test_df, covariates):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
     X = test_df[covariates].values
     
     X_1 = np.concatenate([X, np.ones((X.shape[0], 1))], axis=1)
     X_0 = np.concatenate([X, np.zeros((X.shape[0], 1))], axis=1)
-    X_1 = torch.tensor(X_1, dtype=torch.float32)
-    X_0 = torch.tensor(X_0, dtype=torch.float32)
+    X_1 = torch.tensor(X_1, dtype=torch.float32).to(device)
+    X_0 = torch.tensor(X_0, dtype=torch.float32).to(device)
 
     with torch.no_grad():
-        predicted_effect_1 = model(X_1).numpy()
-        predicted_effect_0 = model(X_0).numpy()
+        predicted_effect_1 = model(X_1).cpu().numpy()
+        predicted_effect_0 = model(X_0).cpu().numpy()
         predicted_effect = predicted_effect_1 - predicted_effect_0
     
     return predicted_effect
