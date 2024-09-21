@@ -3,10 +3,11 @@ from models.utils import *
 import pandas as pd
 import numpy as np
 import os
+import pickle
 
 # Additive Baseline
 # This model trains a separate model for each module and sums the estimated effects.
-def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP"):
+def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale = True, scaler_path=None):
     module_files = os.listdir(f"{csv_path}/")
     
     module_files = [x for x in module_files if "module" in x]
@@ -24,6 +25,16 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     test_data = {}
     for module_file in module_files:
         module_df = module_data[module_file]
+
+        if scale == True:
+            # load the input and output scalers
+            module_id = module_file.split(".")[0].split("_")[-1]
+            module_input_scaler = pickle.load(open(f"{scaler_path}/input_scaler_{module_id}.pkl", "rb"))
+            module_output_scaler = pickle.load(open(f"{scaler_path}/output_scaler_{module_id}.pkl", "rb"))
+            module_df[["output"]] = module_output_scaler.transform(module_df[["output"]].values.reshape(-1, 1))
+            module_features = [x for x in module_df.columns if "feature" in x]
+            module_df[module_features] = module_input_scaler.transform(module_df[module_features])
+
         module_df["assigned_treatment_id"] = module_df["query_id"].apply(lambda x: query_id_treatment_id[str(x)])
         module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment_id"]]
         # drop the assigned treatment id

@@ -401,7 +401,7 @@ class SyntheticDataSampler:
     def create_scalers(self, split_type, biasing_covariate = None, bias_strength = None):
         # load all module files fro .csv folder
         module_files = [file for file in os.listdir(self.csv_folder) if "module" in file]
-        high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
+        # high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
 
         # load split info
         split_folder = "{}/{}".format(self.csv_folder, split_type)
@@ -416,15 +416,19 @@ class SyntheticDataSampler:
                 query_id_to_treatment = json.load(f)
 
         # high_level_output_scaler 
-        high_level_df = pd.read_csv("{}/{}".format(self.csv_folder, high_level_csv_filename))
-        high_level_output_scaler = StandardScaler()
+        # high_level_df = pd.read_csv("{}/{}".format(self.csv_folder, high_level_csv_filename))
+        # high_level_input_scaler = StandardScaler()
+        # high_level_output_scaler = StandardScaler()
 
         # filter based on split and treatment
-        high_level_df = high_level_df[high_level_df["query_id"].isin(split_dict["train"])]
-        if query_id_to_treatment:
-            high_level_df["assigned_treatment"] = high_level_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
-            high_level_df = high_level_df[high_level_df["treatment_id"] == high_level_df["assigned_treatment"]]
-        high_level_output_scaler.fit(high_level_df["query_output"].values.reshape(-1, 1))
+        # module_features = [x for x in high_level_df.columns if "feature" in x]
+        # high_level_df = high_level_df[high_level_df["query_id"].isin(split_dict["train"])]
+        # if query_id_to_treatment:
+        #     high_level_df["assigned_treatment"] = high_level_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
+        #     high_level_df = high_level_df[high_level_df["treatment_id"] == high_level_df["assigned_treatment"]]
+
+        # high_level_input_scaler.fit(high_level_df[module_features].values)
+        # high_level_output_scaler.fit(high_level_df["query_output"].values.reshape(-1, 1))
 
         # save the high level output scaler
         split_folder = "{}/{}_{}/{}".format(self.obs_csv_folder, biasing_covariate, bias_strength, split_type)
@@ -432,8 +436,11 @@ class SyntheticDataSampler:
         if not os.path.exists(scaler_folder):
             os.makedirs(scaler_folder)
 
-        with open("{}/high_level_output_scaler.pkl".format(scaler_folder), "wb") as f:
-            pickle.dump(high_level_output_scaler, f)
+        # with open("{}/high_level_input_scaler.pkl".format(scaler_folder), "wb") as f:
+        #     pickle.dump(high_level_input_scaler, f)
+
+        # with open("{}/high_level_output_scaler.pkl".format(scaler_folder), "wb") as f:
+        #     pickle.dump(high_level_output_scaler, f)
         # save the scalers
         
         # read module_features from config file
@@ -452,16 +459,16 @@ class SyntheticDataSampler:
             module_name = module_file.split("_")[1].split(".")[0]
             module_feature_names = all_feature_names[module_name]
             # filter out the train and test data
-            module_df = module_df[module_df["query_id"].isin(split_dict["train"])]
-            if query_id_to_treatment:
-                module_df["assigned_treatment"] = module_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
-                module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment"]]
-                print("module_df shape: ", module_df.shape) 
+            # module_df = module_df[module_df["query_id"].isin(split_dict["train"])]
+            # if query_id_to_treatment:
+            #     module_df["assigned_treatment"] = module_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
+            #     module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment"]]
+            #     print("module_df shape: ", module_df.shape) 
 
             # sort by module feature names
             module_df = module_df.sort_values(by=module_feature_names)
             # now pre-process the data
-            input_scaler = RobustScaler()
+            input_scaler = StandardScaler()
             # for output, also do log transform and then scale
             output_scaler = StandardScaler()
             # fit the scalers

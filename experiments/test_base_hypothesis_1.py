@@ -45,6 +45,8 @@ parser.add_argument("--run_env", type=str, default="unity", help="Run environmen
 parser.add_argument("--use_subset_features", type=str, default="True", help="Use subset of features")
 # generate trees systematically for creating OOD data
 parser.add_argument("--systematic", type=str, default="False", help="Systematic tree generation")
+# scale the data
+parser.add_argument("--scale", type=bool, default=True, help="Scale the data")
 
 # parse arguments
 args = parser.parse_args()
@@ -69,6 +71,9 @@ covariates_shared = args.covariates_shared
 underlying_model_class = args.underlying_model_class
 use_subset_features = args.use_subset_features
 systematic = args.systematic
+biasing_covariate = "feature_sum"
+bias_strength = 0
+scale = args.scale
 if covariates_shared == "True":
     covariates_shared = True
 else:
@@ -96,6 +101,7 @@ else:
 main_dir = f"{base_dir}/{domain}"
 csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
 obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
+scaler_path = "{}/{}_{}/{}/scalers".format(obs_data_path, biasing_covariate, bias_strength, split_type)
 
 # simulate data
 sampler = SyntheticDataSampler(num_modules, feature_dim, composition_type, fixed_structure, max_depth, num_trees, seed, data_dist, module_function_type, resample=resample,heterogeneity=args.heterogeneity, covariates_shared=covariates_shared, use_subset_features=use_subset_features,systematic=systematic, run_env=run_env)
@@ -106,14 +112,16 @@ data_path = f"{csv_path}/{domain}_data_high_level_features.csv"
 data = pd.read_csv(data_path)
 
 # create observational data
-results = sampler.create_observational_data(biasing_covariate="feature_sum", bias_strength=0)
-df_sampled = pd.read_csv(f"{obs_data_path}/feature_sum_0/df_sampled.csv")
+results = sampler.create_observational_data(biasing_covariate=biasing_covariate, bias_strength=bias_strength)
+df_sampled = pd.read_csv(f"{obs_data_path}/{biasing_covariate}_{bias_strength}/df_sampled.csv")
 
+if scale == True:
+    data, df_sampled = scale_df(data, df_sampled, scaler_path, csv_path)
 # split the data into features, treatment, and outcome
 sampler.create_iid_ood_split(split_type = args.split_type)
 
 # scale the data
-sampler.create_scalers(args.split_type, biasing_covariate="feature_sum", bias_strength=0)
+sampler.create_scalers(args.split_type, biasing_covariate=biasing_covariate, bias_strength=bias_strength)
     # data_sampler.create_scalers("ood", "matrix_size", 10)
 
 # load train and test data
@@ -140,8 +148,6 @@ baseline_gt_causal_effect_dict_train = get_ground_truth_effects(data, train_qids
 # if args.split_type == "iid":
 #     test_df = train_df
 #     test_qids = train_qids
-
-
 
 input_dim = len(covariates)
 if underlying_model_class == "MLP":
@@ -195,7 +201,7 @@ baseline_combined_df_test = pd.concat([baseline_combined_df_test, moe_estimated_
 # Explicitly modular model+
 print("Training Additive Model")
 print(f"Training Additive Model with hidden dim: {hidden_dim}")
-additive_combined_train_df, additive_combined_test_df, module_csvs = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class)
+additive_combined_train_df, additive_combined_test_df, module_csvs = get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=hidden_dim, epochs=epochs, batch_size=batch_size, output_dim=output_dim, underlying_model_class=underlying_model_class, scale=scale)
 
 
 # merge the two dataframes on index
@@ -246,5 +252,6 @@ results_path = f"{main_dir}/results/results_{data_dist}_{module_function_type}_{
 os.makedirs(results_path, exist_ok=True)
 results_file = f"{results_path}/results_{num_modules}_{feature_dim}.json"
 print(f"Results saved at {results_file}")
+print("CSVs saved at {results_csv_folder}")
 with open(results_file, "w") as f:
     json.dump(results, f)
