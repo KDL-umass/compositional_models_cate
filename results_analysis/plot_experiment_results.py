@@ -54,7 +54,7 @@ if experiment == "num_modules":
     varying_values = num_modules_values
 elif experiment == "feature_dim":
     if covariates_shared == "True":
-        feature_dim_values = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+        feature_dim_values = [10, 20, 30, 40, 50, 60]
     else:
         feature_dim_values = list(np.arange(2, 11))
     num_modules_values = [10]

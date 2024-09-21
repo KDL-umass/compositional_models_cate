@@ -112,6 +112,10 @@ df_sampled = pd.read_csv(f"{obs_data_path}/feature_sum_0/df_sampled.csv")
 # split the data into features, treatment, and outcome
 sampler.create_iid_ood_split(split_type = args.split_type)
 
+# scale the data
+sampler.create_scalers(args.split_type, biasing_covariate="feature_sum", bias_strength=0)
+    # data_sampler.create_scalers("ood", "matrix_size", 10)
+
 # load train and test data
 train_test_qids_path = f"{csv_path}/{args.split_type}/train_test_split_qids.json"
 with open(train_test_qids_path, "r") as f:

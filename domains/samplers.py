@@ -424,7 +424,7 @@ class SyntheticDataSampler:
         if query_id_to_treatment:
             high_level_df["assigned_treatment"] = high_level_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
             high_level_df = high_level_df[high_level_df["treatment_id"] == high_level_df["assigned_treatment"]]
-        high_level_output_scaler.fit(np.log(high_level_df["query_output"].values).reshape(-1, 1))
+        high_level_output_scaler.fit(high_level_df["query_output"].values.reshape(-1, 1))
 
         # save the high level output scaler
         split_folder = "{}/{}_{}/{}".format(self.obs_csv_folder, biasing_covariate, bias_strength, split_type)
@@ -466,7 +466,7 @@ class SyntheticDataSampler:
             output_scaler = StandardScaler()
             # fit the scalers
             input_scaler.fit(module_df[module_feature_names].values)
-            output_scaler.fit(np.log(module_df["output"].values).reshape(-1, 1))
+            output_scaler.fit(module_df["output"].values.reshape(-1, 1))
 
             # make the scalers in the split folder
             
@@ -475,6 +475,7 @@ class SyntheticDataSampler:
 
             with open("{}/output_scaler_{}.pkl".format(scaler_folder, module_name), "wb") as f:
                 pickle.dump(output_scaler, f)
+
 class MathsEvaluationDataSampler:
     def __init__(
         self, 
