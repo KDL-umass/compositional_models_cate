@@ -3,7 +3,7 @@ import json
 import os
 import warnings
 import sys
-sys.path.append("/Users/ppruthi/research/compositional_models/compositional_models_cate")
+sys.path.append("../")
 
 import pandas as pd
 from sklearn.metrics import r2_score
@@ -26,7 +26,7 @@ def parse_arguments():
     parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
     parser.add_argument("--module_function_type", type=str, default="mlp", help="Module function type")
     parser.add_argument("--composition_type", type=str, default="parallel", help="Composition type")
-    parser.add_argument("--resample", type=bool, default=False, help="Resample data")
+    parser.add_argument("--resample", type=bool, default=True, help="Resample data")
     parser.add_argument("--seed", type=int, default=42, help="Seed for reproducibility")
     parser.add_argument("--fixed_structure", type=bool, default=True, help="Fixed structure flag")
     parser.add_argument("--data_dist", type=str, default="normal", help="Data distribution")
@@ -45,7 +45,7 @@ def parse_arguments():
     # model_class
     parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
     # run_env
-    parser.add_argument("--run_env", type=str, default="local", help="Run environment")
+    parser.add_argument("--run_env", type=str, default="unity", help="Run environment")
     # use_subset_features
     parser.add_argument("--use_subset_features", type=bool, default=False, help="Use subset features")
     # generate trees systematically for creating OOD data
@@ -150,7 +150,9 @@ def main():
     results_path = f"{main_dir}/results/results_{args.data_dist}_{args.module_function_type}_{args.composition_type}_covariates_shared_{args.covariates_shared}_underlying_model_{args.underlying_model_class}_use_subset_features_{args.use_subset_features}_systematic_{args.systematic}"
     os.makedirs(results_path, exist_ok=True)
     with open(f"{results_path}/results_{args.num_modules}_{args.num_feature_dimensions}_scale_{args.scale}.json", "w") as f:
-    json.dump(results, f)
+        json.dump(results, f)
+
+    print(results)
 
     results_csv_folder = f"{main_dir}/results/csvs"
     os.makedirs(results_csv_folder, exist_ok=True)
@@ -161,6 +163,7 @@ def main():
 
     print(f"Results saved at {results_path}")
     print(f"CSVs saved at {results_csv_folder}")
+    print("Done!")
 
 if __name__ == "__main__":
     main()

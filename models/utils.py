@@ -284,7 +284,7 @@ def scale_df(df_apo, df_sampled, scaler_path, csv_path):
         module_input_scaler = pickle.load(open(f"{scaler_path}/input_scaler_{module_id}.pkl", "rb"))
         module_output_scaler = pickle.load(open(f"{scaler_path}/output_scaler_{module_id}.pkl", "rb"))
         module_features = [x for x in df_apo.columns if f"module_{module_id}_feature" in x]
-        print(module_features)
+        
         module_output = f"module_{module_id}_output"
         df_apo[[module_output]] = module_output_scaler.transform(df_apo[[module_output]].values.reshape(-1, 1))
         df_apo[module_features] = module_input_scaler.transform(df_apo[module_features])

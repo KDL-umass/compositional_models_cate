@@ -699,7 +699,7 @@ class MathsEvaluationDataSampler:
             # replace nan or inf with 0
             module_df = module_df.replace([np.inf, -np.inf], np.nan)
             module_df = module_df.fillna(0)
-            print("module_df shape: ", module_df.shape)
+            
             module_name = module_file.split("_")[1].split(".")[0]
             module_feature_names = all_feature_names[module_name]
             # filter out the train and test data
@@ -707,7 +707,7 @@ class MathsEvaluationDataSampler:
             if query_id_to_treatment:
                 module_df["assigned_treatment"] = module_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
                 module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment"]]
-                print("module_df shape: ", module_df.shape) 
+                
 
             # sort by module feature names
             module_df = module_df.sort_values(by=module_feature_names)
