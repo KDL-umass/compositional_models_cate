@@ -12,7 +12,9 @@ import torch
 import torch.nn as nn
 from itertools import combinations
 
-def generate_feature(feature_dim=3, data_dist="uniform"):
+def generate_feature(feature_dim=3, data_dist="uniform", seed=None):
+    if seed:
+        np.random.seed(seed)
     if data_dist == "normal":
         means = np.random.uniform(0, 1, feature_dim)
         covs = np.random.uniform(0, 3, (feature_dim, feature_dim))
@@ -136,8 +138,9 @@ def generate_systematic_trees(num_modules, feature_dim=3, seed=42, num_trees=100
         trees_per_combination = trees_per_group // len(combinations_list)
         
         for module_combination in combinations_list:
-            for _ in range(trees_per_combination):
-                input_features = generate_feature(data_dist=data_dist, feature_dim=feature_dim)
+            for i in range(trees_per_combination):
+                input_features = generate_feature(data_dist=data_dist, feature_dim=feature_dim, seed=i)
+                
                 
                 tree = build_tree_systematically(module_combination, 1, set(), data_dist=data_dist, covariates_shared=covariates_shared, input_features=input_features, feature_dim=feature_dim, max_depth=max_depth)
                 if tree:

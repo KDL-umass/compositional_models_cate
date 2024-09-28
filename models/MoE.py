@@ -74,11 +74,9 @@ class MoE(nn.Module):
 
     # define the forward method
     def forward(self, x):
-        # get the gate probabilities
-        gate_probs = self.gate(x)
-        # get the expert outputs
         expert_outputs = torch.stack([expert(x) for expert in self.experts], dim=1)
-        # get the final output
+        # squeeze the expert outputs to remove the last dimension
+        gate_probs = self.gate(x)
         final_output = torch.sum(gate_probs.unsqueeze(-1) * expert_outputs, dim=1)
         return final_output
 
