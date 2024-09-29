@@ -47,6 +47,24 @@ def mlp_module(*inputs, model):
         output = model(torch.tensor(X, dtype=torch.float32))
     return output.item()
 
+def logarithmic_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    y = np.sum(w[:Mj] * np.log(np.abs(X) + 1)) + w[-1]
+    return y
+
+def sigmoid_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    y = 1 / (1 + np.exp(-np.dot(X, w[:Mj]) - w[-1]))
+    return y
+
+def exponential_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    y = np.exp(np.dot(X, w[:Mj])) + w[-1]
+    return y
+
 
 
 # TODO: add more modules
@@ -62,7 +80,7 @@ class SyntheticDataSampler:
         num_trees=1000,
         seed=42,
         data_dist="uniform",
-        module_function_type = "linear",
+        module_function_types = None,
         domain = "synthetic_data",
         resample = False,
         heterogeneity = 1,
@@ -86,7 +104,7 @@ class SyntheticDataSampler:
         self.data_dist = data_dist
         self.input_trees, self.module_means, self.module_covs = None, None, None
         self.input_trees_dict = {}
-        self.module_type = module_function_type
+        self.module_function_types = module_function_types or ['quadratic'] * num_modules  # Default to all linear if not specified
         self.module_params_dict = {}
         self.module_functions = None
         self.resample = resample
@@ -175,64 +193,69 @@ class SyntheticDataSampler:
         num_same_weight_modules = int(self.num_modules * (1 - self.heterogeneity))
         
         # Define the MLP architecture if needed
-        if self.module_type == 'mlp':
-            input_dim = module_feature_dim
-            
-
-            hidden_dim1 = 2 * input_dim
-            hidden_dim2 = 2 * input_dim
-            output_dim = 1
-            
-            def create_mlp():
-                model = nn.Sequential(
-                    nn.Linear(input_dim, hidden_dim1),
-                    nn.ReLU(),
-                    nn.Linear(hidden_dim1, hidden_dim2),
-                    nn.ReLU(),
-                    nn.Linear(hidden_dim2, output_dim)
-                )
-                return model
-            
-            base_mlp = create_mlp()
+        
+        input_dim = module_feature_dim
+        if "mlp" in self.module_function_types:
+            base_mlp = self.create_mlp(input_dim)
         
         for module_id in range(1, self.num_modules + 1):
             Mj = module_feature_dim # feature dim for this module
             
             if module_id <= num_same_weight_modules:
                 # Use exactly the same weights for these modules
-                if self.module_type == 'linear' or self.module_type == 'quadratic':
-                    w = base_weights
-                elif self.module_type == 'mlp':
+                module_type = self.module_function_types[0]
+                if module_type == 'mlp':
                     model = copy.deepcopy(base_mlp)
+                else:
+                    w = base_weights
+                
             else:
                 # Use distinct weights for the remaining modules
                 np.random.seed(base_seed + module_id)
-                if self.module_type == 'linear' or self.module_type == 'quadratic':
-                    # 2 for the quadratic function, Mj +1 for the treatment and 1 for the bias term
-                    w = np.random.uniform(0, 1, 2 * (Mj) + 1)
-                elif self.module_type == 'mlp':
-                    model = create_mlp()
+                module_type = self.module_function_types[module_id - num_same_weight_modules - 1]
+                if module_type == 'mlp':
+                    model = self.create_mlp(input_dim)
                     # Initialize the weights randomly
                     for layer in model.modules():
                         if isinstance(layer, nn.Linear):
                             nn.init.xavier_uniform_(layer.weight)
                             nn.init.zeros_(layer.bias)
+                else:
+                   w = np.random.uniform(0, 1, 2 * (Mj) + 1)
+                
             
-            if self.module_type == 'linear' or self.module_type == 'quadratic':
-                self.module_params_dict[module_id] = {"w": w.tolist()}
-            elif self.module_type == 'mlp':
+            if module_type == 'mlp':
                 self.module_params_dict[module_id] = {"model": model}
+            else:
+                self.module_params_dict[module_id] = {"w": w.tolist()}
 
+    def create_mlp(self, input_dim):
+        hidden_dim1 = 2 * input_dim
+        hidden_dim2 = 2 * input_dim
+        output_dim = 1
+        
+        model = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim1),
+            nn.ReLU(),
+            nn.Linear(hidden_dim1, hidden_dim2),
+            nn.ReLU(),
+            nn.Linear(hidden_dim2, output_dim)
+        )
+        
+        # Initialize the weights randomly
+        for layer in model.modules():
+            if isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                nn.init.zeros_(layer.bias)
+        
+        return model
+            
     def simulate_potential_outcomes(self, treatment_id, use_subset_features = False, batch_size=10000):
         module_functions = {}
+        # revisit this logic again when heterogeneity is not 1
         for module_id in range(1, self.num_modules + 1):
-            if self.module_type == 'linear':
-                module_function_type = 'linear_module'
-            elif self.module_type == 'quadratic':
-                module_function_type = 'quadratic_module'
-            elif self.module_type == 'mlp':
-                module_function_type = 'mlp_module'
-            module_function = globals()[module_function_type]
+            module_type = self.module_function_types[module_id - 1]
+            module_function = globals()[f"{module_type}_module"]
             module_functions[module_id] = module_function
         self.module_functions = module_functions
         self.generate_module_weights(treatment_id)
@@ -251,10 +274,10 @@ class SyntheticDataSampler:
             if self.composition_type == "hierarchical":
                 input_processed_tree_dict = expand_features(input_processed_tree_dict)
             input_dict = {}
-            if self.module_type == 'linear' or self.module_type == 'quadratic':
-                input_dict["module_params_dict"] = self.module_params_dict
-            else:
-                input_dict["module_params_dict"] = None
+            
+            # save weights for all modules except mlp
+            input_dict["module_params_dict"] = {k: v["w"] for k, v in self.module_params_dict.items() if self.module_function_types[k - 1] != "mlp"}
+            
             input_dict["query_id"] = i
             input_dict["treatment_id"] = treatment_id
             input_dict["json_tree"] = input_processed_tree_dict
@@ -459,11 +482,12 @@ class SyntheticDataSampler:
             module_name = module_file.split("_")[1].split(".")[0]
             module_feature_names = all_feature_names[module_name]
             # filter out the train and test data
-            # module_df = module_df[module_df["query_id"].isin(split_dict["train"])]
-            # if query_id_to_treatment:
-            #     module_df["assigned_treatment"] = module_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
-            #     module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment"]]
-            #     print("module_df shape: ", module_df.shape) 
+            module_df = module_df[module_df["query_id"].isin(split_dict["train"])]
+            if query_id_to_treatment:
+                module_df["assigned_treatment"] = module_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
+                module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment"]]
+                print("module_df shape: ", module_df.shape) 
+
 
             # sort by module feature names
             module_df = module_df.sort_values(by=module_feature_names)
