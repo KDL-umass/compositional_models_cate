@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
+from catenets.models.jax import TNet, SNet, DRNet, SNet1, SNet2
 # set the seed
 torch.manual_seed(42)
 
@@ -21,46 +22,29 @@ class BaselineModel(nn.Module):
     def forward(self, x):
         return self.ff_network(x)
 
-class BaselineLinearModel(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(BaselineLinearModel, self).__init__()
-        self.ff_network = nn.Sequential(
-            nn.Linear(input_dim, output_dim)
-        )
-
-    def forward(self, x):
-        return self.ff_network(x)
-
-# define non neural network model
-class BaselineRFModel():
-    def __init__(self, input_dim, output_dim):
-        self.model = RandomForestRegressor(n_estimators=100, max_depth=2, random_state=42)
-    
-    
-def train_rf_model(model, train_df, covariates, treatment, outcome):
+def train_catenets(train_df, covariates, treatment, outcome, baseline="tnet"):
     X = train_df[covariates].values
     T = train_df[treatment].values
     Y = train_df[outcome].values
-    X_T = np.concatenate([X, T.reshape(-1, 1)], axis=1)
-    
-    model.fit(X_T, Y)
-    
-    return model
+    if baseline == "tnet":
+        est = TNet()
+    elif baseline == "snet":
+        est = SNet()
+    elif baseline == "snet1":
+        est = SNet1()
+    elif baseline == "snet2":
+        est = SNet2()
+    elif baseline == "drnet":
+        est = DRNet()
+    est.fit(X,Y,T)
 
-def predict_rf_model(model, test_df, covariates):
+    return est
+
+def predict_catenets(model, test_df, covariates):
     X = test_df[covariates].values
-    X_1 = np.concatenate([X, np.ones((X.shape[0], 1))], axis=1)
-    X_0 = np.concatenate([X, np.zeros((X.shape[0], 1))], axis=1)
+    causal_effect_estimates = model.predict(X)
+    return causal_effect_estimates
     
-    predicted_effect_1 = model.predict(X_1)
-    predicted_effect_0 = model.predict(X_0)
-    predicted_effect = predicted_effect_1 - predicted_effect_0
-    
-    return predicted_effect
-
-# Define the Mixture of Experts model that takes the covariates and treatment as input and predicts the outcome
-# The model consists of a gate model and multiple expert models
-# The goal is to learn the gate probabilities and expert outputs that maximize the likelihood of the data
 class MoE(nn.Module):
     # define the __init__ method
     def __init__(self, input_dim, hidden_dim, output_dim, num_experts):
@@ -70,10 +54,10 @@ class MoE(nn.Module):
         self.output_dim = output_dim
         self.num_experts = num_experts
         self.experts = nn.ModuleList([create_expert_model(input_dim, hidden_dim, output_dim) for _ in range(num_experts)])
-        # self.gate = create_gate_model(input_dim, num_experts)
+        self.gate = create_gate_model(input_dim, num_experts)
         # define an aggregation model that combines the outputs of the experts
 
-        self.aggregation = nn.Linear(num_experts, 1) 
+        
 
 
     # define the forward method
@@ -100,28 +84,6 @@ def create_gate_model(input_dim, num_experts):
     model = nn.Sequential(
         nn.Linear(input_dim, num_experts),
         nn.Softmax(dim=1)
-    )
-    return model
-
-# define MoE model with linear experts
-class MoELinear(nn.Module):
-    def __init__(self, input_dim, output_dim, num_experts):
-        super(MoELinear, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.num_experts = num_experts
-        self.experts = nn.ModuleList([create_expert_linear_model(input_dim, output_dim) for _ in range(num_experts)])
-        self.gate = create_gate_model(input_dim, num_experts)
-
-    def forward(self, x):
-        gate_probs = self.gate(x)
-        expert_outputs = torch.stack([expert(x) for expert in self.experts], dim=1)
-        final_output = torch.sum(gate_probs.unsqueeze(-1) * expert_outputs, dim=1)
-        return final_output
-
-def create_expert_linear_model(input_dim, output_dim):
-    model = nn.Sequential(
-        nn.Linear(input_dim, output_dim)
     )
     return model
 

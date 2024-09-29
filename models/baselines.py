@@ -120,34 +120,3 @@ def x_learner(df, covariates, treatment, outcome, X_test = None):
     return causal_effect_estimates
 
 # CATENETS
-def run_catenets(df, covariates, treatment, outcome, X_test = None, baseline="tnet"):
-    # Split the data into features, treatment, and outcome
-    X = df[covariates].values
-    T = df[treatment].values
-    Y = df[outcome].values
-
-     # Fit the causal forest model
-    if baseline == "tnet":
-        est = TNet()
-    elif baseline == "snet":
-        est = SNet()
-    elif baseline == "snet1":
-        est = SNet1()
-    elif baseline == "snet2":
-        est = SNet2()
-    elif baseline == "drnet":
-        est = DRNet()
-    est.fit(X,Y,T)
-
-    if X_test is None:
-        X_test = X
-    try:
-        # by default we get y0 and y1
-        causal_effect_estimates, y0, y1 = est.predict(X_test, return_po=True)
-
-        # return the causal effect estimates and the predicted outcomes (first y1 and then y0)
-        return causal_effect_estimates, y1, y0
-    except:
-        causal_effect_estimates = est.predict(X_test)
-        return causal_effect_estimates
-

@@ -20,21 +20,30 @@ def main():
     args = parse_arguments()
     print(args)
     main_dir, csv_path, obs_data_path, scaler_path = setup_directories(args)
-
+    module_function_types = ["linear", "quadratic", "mlp", "logarithmic", "exponential", "sigmoid"]
     sampler = SyntheticDataSampler(args.num_modules, args.num_feature_dimensions, args.composition_type, 
                                     args.fixed_structure, args.num_modules, args.num_samples, args.seed, 
-                                    args.data_dist, args.module_function_type, resample=args.resample, 
+                                    args.data_dist, module_function_types=module_function_types, resample=args.resample,
                                     heterogeneity=args.heterogeneity, covariates_shared=args.covariates_shared, 
                                     use_subset_features=args.use_subset_features, systematic=args.systematic, 
                                     run_env=args.run_env)
 
     data, df_sampled = simulate_and_prepare_data(args, sampler, csv_path, obs_data_path, scaler_path)
     train_df, test_df, train_qids, test_qids = load_train_test_data(csv_path, args, df_sampled)
-    covariates = [x for x in train_df.columns if "module_1_feature" in x] if args.covariates_shared else [x for x in train_df.columns if "feature" in x]
+
+    train_df, test_df = process_shared_covariates_row_wise(train_df, test_df, args)
+    covariates = [x for x in train_df.columns if "feature" in x]
+
+
+    # covariates = [x for x in train_df.columns if "module_1_feature" in x] if args.covariates_shared else [x for x in train_df.columns if "feature" in x]
+    if args.systematic:
+        covariates += [x for x in train_df.columns if "num" in x]
+
     treatment, outcome = "treatment_id", "query_output"
 
     gt_effects_test = get_ground_truth_effects(data, test_qids)
     gt_effects_train = get_ground_truth_effects(data, train_qids)
+
 
     input_dim = len(covariates)
     models = {
@@ -57,6 +66,14 @@ def main():
         estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
         results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+
+    # Catenets
+    print("Training Catenets Model")
+    estimated_effects_train, estimated_effects_test = train_and_evaluate_catenets(train_df, test_df, covariates, treatment, outcome, train_qids, test_qids)
+    gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
+    estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
+    results["Catenets_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+    results["Catenets_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
         
     print("Training Additive Model")
     additive_combined_train_df, additive_combined_test_df, module_csvs_train, module_csvs_test = get_additive_model_effects(
