@@ -88,7 +88,7 @@ class SyntheticDataSampler:
         use_subset_features = False,
         run_env = "local",
         systematic = False,
-        trees_per_group = 1000
+        trees_per_group = 2000
     ):
         self.num_modules = num_modules
         print("num_modules: ", num_modules)
@@ -179,14 +179,14 @@ class SyntheticDataSampler:
         np.random.seed(base_seed)
         
         if not self.use_subset_features:
-            base_weights = np.random.uniform(0, 1, 2 * (self.feature_dim) + 1)
+            base_weights = np.random.uniform(0.5, 1.5, 2 * (self.feature_dim) + 1)
             module_feature_dim = self.feature_dim
         else:
             # set feature dim equally across all modules
             num_modules = self.num_modules
             feature_dim = self.feature_dim
             feature_dim_per_module = int(feature_dim / num_modules)
-            base_weights = np.random.uniform(0, 1, 2 * (feature_dim_per_module) + 1)
+            base_weights = np.random.uniform(0.5, 1.5, 2 * (feature_dim_per_module) + 1)
             module_feature_dim = feature_dim_per_module
         
         # Determine how many modules will have the same weights
@@ -221,7 +221,7 @@ class SyntheticDataSampler:
                             nn.init.xavier_uniform_(layer.weight)
                             nn.init.zeros_(layer.bias)
                 else:
-                   w = np.random.uniform(0, 1, 2 * (Mj) + 1)
+                   w = np.random.uniform(0.5, 1.5, 2 * (Mj) + 1)
                 
             
             if module_type == 'mlp':
@@ -380,7 +380,7 @@ class SyntheticDataSampler:
         with open("{}/treatment_assignments.json".format(obs_folder), "w") as f:
             json.dump(treatment_assignments, f, indent=4)
 
-    def create_iid_ood_split(self, split_type = "iid", test_size = 0.2):
+    def create_iid_ood_split(self, split_type = "iid", test_size = 0.4):
         high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
         # iid split just involves evenly splitting the data for each depth
         # open the file
@@ -434,7 +434,7 @@ class SyntheticDataSampler:
         # load treatment info
         query_id_to_treatment = None
         if biasing_covariate and bias_strength:
-            obs_folder = "{}/observational_data/{}_{}/".format(self.csv_folder, biasing_covariate, bias_strength)
+            obs_folder = "{}/{}_{}/".format(self.obs_csv_folder, biasing_covariate, bias_strength)
             with open("{}/treatment_assignments.json".format(obs_folder), "r") as f:
                 query_id_to_treatment = json.load(f)
 
@@ -627,6 +627,7 @@ class MathsEvaluationDataSampler:
             os.makedirs(obs_folder)
         df_sampled.to_csv("{}/df_sampled.csv".format(obs_folder), index=False)
         df_cf_sampled.to_csv("{}/df_cf_sampled.csv".format(obs_folder), index=False)
+        print(obs_folder)
 
         # save treatment assignments as json
         with open("{}/treatment_assignments.json".format(obs_folder), "w") as f:
@@ -686,7 +687,7 @@ class MathsEvaluationDataSampler:
         # load treatment info
         query_id_to_treatment = None
         if biasing_covariate and bias_strength:
-            obs_folder = "{}/observational_data/{}_{}/".format(self.csv_folder, biasing_covariate, bias_strength)
+            obs_folder = "{}/{}_{}/".format(self.obs_csv_folder, biasing_covariate, bias_strength)
             with open("{}/treatment_assignments.json".format(obs_folder), "r") as f:
                 query_id_to_treatment = json.load(f)
 
