@@ -529,7 +529,7 @@ def process_trees_and_create_module_csvs(data_folders, csv_folder, source="proce
 
     # Write CSV data to files for each module
     print("Writing CSV data to files for each module.")
-    print(module_feature_names)
+    
     for module_name, data in csv_data.items():
         csv_filename = f"module_{module_name}.csv"
         csv_path = os.path.join(csv_folder, csv_filename)

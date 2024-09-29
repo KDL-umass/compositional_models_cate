@@ -70,7 +70,11 @@ class MoE(nn.Module):
         self.output_dim = output_dim
         self.num_experts = num_experts
         self.experts = nn.ModuleList([create_expert_model(input_dim, hidden_dim, output_dim) for _ in range(num_experts)])
-        self.gate = create_gate_model(input_dim, num_experts)
+        # self.gate = create_gate_model(input_dim, num_experts)
+        # define an aggregation model that combines the outputs of the experts
+
+        self.aggregation = nn.Linear(num_experts, 1) 
+
 
     # define the forward method
     def forward(self, x):
@@ -133,6 +137,7 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     T = train_df[treatment].values
     Y = train_df[outcome].values
     X_T = np.concatenate([X, T.reshape(-1, 1)], axis=1)
+    print(X_T.shape)
     
     loss_fn = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)

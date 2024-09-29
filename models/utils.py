@@ -270,7 +270,7 @@ def get_estimated_effects(data, qids):
 
 # calculate pehe for the two models
 def pehe(ground_truth, estimated):
-    return np.sqrt(np.mean((ground_truth - estimated)**2))
+    return np.mean((ground_truth - estimated)**2)
     
 def get_r2_score(ground_truth, estimated):
     return r2_score(ground_truth, estimated)

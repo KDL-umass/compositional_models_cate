@@ -70,7 +70,8 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     additive_estimated_effects_train = {}
     additive_ground_truth_effects_test = {}
     additive_estimated_effects_test = {}
-    modules_csvs = {}
+    modules_csvs_train = {}
+    modules_csvs_test = {}
     for module_file in module_files:
         module_name = module_file.split(".")[0]
         train_df = train_data[module_file]
@@ -89,7 +90,9 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
         # merge 
         module_combined_train_df = pd.concat([module_gt_effect_df_train, module_estimated_effects_train_df], axis=1)
         module_combined_test_df = pd.concat([module_gt_effect_df_test, module_estimated_effects_test_df], axis=1)
-        modules_csvs[module_name] = module_combined_test_df
+        modules_csvs_train[module_name] = module_combined_train_df
+        modules_csvs_test[module_name] = module_combined_test_df
+        
 
         
         if len(additive_estimated_effects_test) == 0:
@@ -131,4 +134,4 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     additive_estimated_effect_test_df = pd.DataFrame.from_dict(additive_estimated_effects_test, orient="index", columns=["estimated_effect"])
     additive_combined_test_df = pd.concat([additive_gt_effect_test_df, additive_estimated_effect_test_df], axis=1)
 
-    return additive_combined_train_df, additive_combined_test_df, modules_csvs
+    return additive_combined_train_df, additive_combined_test_df, modules_csvs_train, modules_csvs_test
