@@ -249,9 +249,12 @@ def general_scatter_plot(true, predicted, true_label, predicted_label, title, pl
     plt.savefig(plot_path)
 
 def get_ground_truth_effects(data, qids, treatment_col='treatment_id', outcome_col='query_output'):
+    covariates = [x for x in data.columns if "feature" in x] + [treatment_col] + [outcome_col]
+    
     # get ground truth effects from data 
     # Group by query_id and treatment_id, then unstack to have treatments as columns
     grouped = data.groupby(['query_id', treatment_col])[outcome_col].first().unstack()
+    
 
     # Calculate the causal effect (treatment 1 - treatment 0)
     causal_effect = grouped[1] - grouped[0]
@@ -286,10 +289,12 @@ def scale_df(df_apo, df_sampled, scaler_path, csv_path):
         module_features = [x for x in df_apo.columns if f"module_{module_id}_feature" in x]
         
         module_output = f"module_{module_id}_output"
+        # print(df_apo[["query_id", "treatment_id", f"module_{module_id}_output"]].head())
         df_apo[[module_output]] = module_output_scaler.transform(df_apo[[module_output]].values.reshape(-1, 1))
-        df_apo[module_features] = module_input_scaler.transform(df_apo[module_features])
+        # print(df_apo[["query_id", "treatment_id", f"module_{module_id}_output"]].head())
+        df_apo[module_features] = module_input_scaler.transform(df_apo[module_features].values)
         df_sampled[[module_output]] = module_output_scaler.transform(df_sampled[[module_output]].values.reshape(-1, 1))
-        df_sampled[module_features] = module_input_scaler.transform(df_sampled[module_features])
+        df_sampled[module_features] = module_input_scaler.transform(df_sampled[module_features].values)
         module_output_columns.append(module_output)
 
     # re-assign the query_output by adding the output of all modules

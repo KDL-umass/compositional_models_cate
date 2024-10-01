@@ -25,6 +25,7 @@ def quadratic_module(*inputs, w):
     X = np.array(inputs)
     Mj = len(X)
     w = np.array(w)
+    
     # quadratic outcome function
     x_squared = X**2
     y = np.dot(X**2, w[:Mj]) 
@@ -174,19 +175,22 @@ class SyntheticDataSampler:
         
     def generate_module_weights(self, treatment_id):
         base_seed = self.seed + treatment_id * 100
-        
+        if self.composition_type == "hierarchical":
+            input_dim = self.feature_dim + 1
+        else:
+            input_dim = self.feature_dim
         # Generate a base set of weights
         np.random.seed(base_seed)
         
         if not self.use_subset_features:
-            base_weights = np.random.uniform(0.5, 1.5, 2 * (self.feature_dim) + 1)
-            module_feature_dim = self.feature_dim
+            base_weights = np.random.uniform(0.1, 1, 2 * (input_dim) + 1)
+            module_feature_dim = input_dim
         else:
             # set feature dim equally across all modules
             num_modules = self.num_modules
-            feature_dim = self.feature_dim
+            feature_dim = input_dim
             feature_dim_per_module = int(feature_dim / num_modules)
-            base_weights = np.random.uniform(0.5, 1.5, 2 * (feature_dim_per_module) + 1)
+            base_weights = np.random.uniform(0.1, 1, 2 * (feature_dim_per_module) + 1)
             module_feature_dim = feature_dim_per_module
         
         # Determine how many modules will have the same weights
@@ -221,7 +225,7 @@ class SyntheticDataSampler:
                             nn.init.xavier_uniform_(layer.weight)
                             nn.init.zeros_(layer.bias)
                 else:
-                   w = np.random.uniform(0.5, 1.5, 2 * (Mj) + 1)
+                   w = np.random.uniform(0.1, 1, 2 * (Mj) + 1)
                 
             
             if module_type == 'mlp':
@@ -287,10 +291,10 @@ class SyntheticDataSampler:
                 self.processed_trees_0.append(input_dict)
             else:
                 self.processed_trees_1.append(input_dict)
-            # if treatment_id == 0:
-            #     path = self.path_0
-            # else:
-            #     path = self.path_1
+            if treatment_id == 0:
+                path = self.path_0
+            else:
+                path = self.path_1
             
             # batch.append(input_dict)
             # batch_counter += 1
@@ -305,14 +309,14 @@ class SyntheticDataSampler:
             # if len(batch) > 0:
             #     self._save_batch(batch, treatment_id, file_counter)
 
-    # def _save_batch(self, batch, treatment_id, file_counter):
-    #     path = self.path_0 if treatment_id == 0 else self.path_1
-    #     filename = f"{path}/batch_{file_counter}.jsonl"
+    def _save_batch(self, batch, treatment_id, file_counter):
+        path = self.path_0 if treatment_id == 0 else self.path_1
+        filename = f"{path}/batch_{file_counter}.jsonl"
         
-    #     with open(filename, 'w') as f:
-    #         for item in batch:
-    #             json.dump(item, f)
-    #             f.write('\n')
+        with open(filename, 'w') as f:
+            for item in batch:
+                json.dump(item, f)
+                f.write('\n')
         
         # batch save the input trees
             
@@ -421,91 +425,6 @@ class SyntheticDataSampler:
         with open("{}/train_test_split_qids.json".format(split_folder), "w") as f:
             json.dump(split_dict, f, indent=4)
 
-    def create_scalers(self, split_type, biasing_covariate = None, bias_strength = None):
-        # load all module files fro .csv folder
-        module_files = [file for file in os.listdir(self.csv_folder) if "module" in file]
-        # high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
-
-        # load split info
-        split_folder = "{}/{}".format(self.csv_folder, split_type)
-        with open("{}/train_test_split_qids.json".format(split_folder), "r") as f:
-            split_dict = json.load(f)
-
-        # load treatment info
-        query_id_to_treatment = None
-        if biasing_covariate and bias_strength:
-            obs_folder = "{}/{}_{}/".format(self.obs_csv_folder, biasing_covariate, bias_strength)
-            with open("{}/treatment_assignments.json".format(obs_folder), "r") as f:
-                query_id_to_treatment = json.load(f)
-
-        # high_level_output_scaler 
-        # high_level_df = pd.read_csv("{}/{}".format(self.csv_folder, high_level_csv_filename))
-        # high_level_input_scaler = StandardScaler()
-        # high_level_output_scaler = StandardScaler()
-
-        # filter based on split and treatment
-        # module_features = [x for x in high_level_df.columns if "feature" in x]
-        # high_level_df = high_level_df[high_level_df["query_id"].isin(split_dict["train"])]
-        # if query_id_to_treatment:
-        #     high_level_df["assigned_treatment"] = high_level_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
-        #     high_level_df = high_level_df[high_level_df["treatment_id"] == high_level_df["assigned_treatment"]]
-
-        # high_level_input_scaler.fit(high_level_df[module_features].values)
-        # high_level_output_scaler.fit(high_level_df["query_output"].values.reshape(-1, 1))
-
-        # save the high level output scaler
-        split_folder = "{}/{}_{}/{}".format(self.obs_csv_folder, biasing_covariate, bias_strength, split_type)
-        scaler_folder = "{}/scalers".format(split_folder)
-        if not os.path.exists(scaler_folder):
-            os.makedirs(scaler_folder)
-
-        # with open("{}/high_level_input_scaler.pkl".format(scaler_folder), "wb") as f:
-        #     pickle.dump(high_level_input_scaler, f)
-
-        # with open("{}/high_level_output_scaler.pkl".format(scaler_folder), "wb") as f:
-        #     pickle.dump(high_level_output_scaler, f)
-        # save the scalers
-        
-        # read module_features from config file
-        with open(f"{self.config_folder}/{self.domain}_config.json", "r") as f:
-            config = json.load(f)
-            all_feature_names = config["module_feature_names"]
-
-
-        for module_file in module_files:
-            module_df = pd.read_csv("{}/{}".format(self.csv_folder, module_file))
-
-            # replace nan or inf with 0
-            module_df = module_df.replace([np.inf, -np.inf], np.nan)
-            module_df = module_df.fillna(0)
-            print("module_df shape: ", module_df.shape)
-            module_name = module_file.split("_")[1].split(".")[0]
-            module_feature_names = all_feature_names[module_name]
-            # filter out the train and test data
-            module_df = module_df[module_df["query_id"].isin(split_dict["train"])]
-            if query_id_to_treatment:
-                module_df["assigned_treatment"] = module_df["query_id"].apply(lambda x: query_id_to_treatment[str(x)])
-                module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment"]]
-                print("module_df shape: ", module_df.shape) 
-
-
-            # sort by module feature names
-            module_df = module_df.sort_values(by=module_feature_names)
-            # now pre-process the data
-            input_scaler = StandardScaler()
-            # for output, also do log transform and then scale
-            output_scaler = StandardScaler()
-            # fit the scalers
-            input_scaler.fit(module_df[module_feature_names].values)
-            output_scaler.fit(module_df["output"].values.reshape(-1, 1))
-
-            # make the scalers in the split folder
-            
-            with open("{}/input_scaler_{}.pkl".format(scaler_folder, module_name), "wb") as f:
-                pickle.dump(input_scaler, f)
-
-            with open("{}/output_scaler_{}.pkl".format(scaler_folder, module_name), "wb") as f:
-                pickle.dump(output_scaler, f)
 
 class MathsEvaluationDataSampler:
     def __init__(

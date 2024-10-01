@@ -32,7 +32,7 @@ class Node:
             self.feature_names = [f"feature_{i}" for i in range(len(features))]
         else:
             self.feature_names = feature_names
-
+        
 
     def to_dict(self):
         node_dict = {

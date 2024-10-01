@@ -11,22 +11,11 @@
 conda activate in-context-learning
 cd /work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/experiments
 
-
-base_cmd="python test_base_hypotheses_modularized.py"
-
-module_function_types=("mlp" "quadratic" "linear")
-data_dist=("normal" "uniform")
-# Feature dimension lists
-feature_dim_list=(1 2 3 4 5 6 7 8 9 10)
-feature_dim_list_10=(1 2 5 10 20 30 40 50 60 70 80 90 100)
-
-#!/bin/bash
-
 # Path to your Python script
 PYTHON_SCRIPT="test_base_hypotheses_modularized.py"
 
 # Common arguments that are always true
-COMMON_ARGS="--scale --resample --fixed_structure"
+
 
 # Function to run experiments
 run_experiments() {
@@ -38,33 +27,38 @@ run_experiments() {
     for feature_dim in "${feature_dim_list[@]}"; do
         for module_function_type in "linear" "quadratic" "mlp"; do
             for data_dist in "normal" "uniform"; do
-                # Determine the split_type based on systematic
-                local split_type="ood"
-                if [ "$systematic" = "false" ]; then
-                    split_type="iid"
-                fi
+                for bias_strength in {0..10}; do
+                    # Determine the split_type based on systematic
+                    local split_type="ood"
+                    if [ "$systematic" = "false" ]; then
+                        split_type="iid"
+                    fi
 
-                cmd="python $PYTHON_SCRIPT \
-                    $COMMON_ARGS \
-                    --num_modules 10 \
-                    --num_feature_dimensions $feature_dim \
-                    --module_function_type $module_function_type \
-                    --data_dist $data_dist \
-                    --covariates_shared $covariates_shared \
-                    --underlying_model_class MLP \
-                    --use_subset_features $use_subset_features \
-                    --systematic $systematic \
-                    --split_type $split_type"
-                echo "Running: $cmd"
-                eval $cmd
+                    cmd="python $PYTHON_SCRIPT \
+                        --num_modules 6 \
+                        --num_feature_dimensions $feature_dim \
+                        --module_function_type $module_function_type \
+                        --data_dist $data_dist \
+                        --covariates_shared $covariates_shared \
+                        --underlying_model_class MLP \
+                        --use_subset_features $use_subset_features \
+                        --systematic $systematic \
+                        --split_type $split_type \
+                        --bias_strength $bias_strength"
+                    echo "Running: $cmd"
+                    eval $cmd
+                done
             done
         done
     done
 }
 
+# Feature dimension lists
+feature_dim_list=(1 2 3 4 5 6 7 8 9 10)
+feature_dim_list_10=(1 2 5 10 20 30 40 50 60 70 80 90 100)
 
 # Run experiments for systematic true and false
-for systematic in true false; do
+for systematic in true; do
     echo "Running experiments with systematic=$systematic"
     
     # Covariates shared true

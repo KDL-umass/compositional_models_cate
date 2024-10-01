@@ -393,6 +393,8 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
 
     # Traverse the tree and propagate values
     traverse_tree(input_tree_dict)
+    # find number of modules in the tree 
+
     query_output = input_tree_dict['total_output']
 
     # Return the output of the root module
@@ -402,18 +404,24 @@ def expand_features(tree_dict):
     if tree_dict is None:
         return None
     expanded_features = tree_dict["features"].copy()
+    expanded_feature_names = tree_dict["feature_names"].copy()
 
     if tree_dict["children"] is None:
         # expand by adding 0
         expanded_features.append(0.0)
+        expanded_feature_names.append("child_output")
         tree_dict["features"] = expanded_features
+        tree_dict["feature_names"] = expanded_feature_names
         return tree_dict
 
     for child in tree_dict["children"]:
         expand_features(child)
+        
         expanded_features.append(child["output"])
+        expanded_feature_names.append("child_output")
 
     tree_dict["features"] = expanded_features
+    tree_dict["feature_names"] = expanded_feature_names
 
     return tree_dict
     
@@ -425,6 +433,7 @@ def process_high_level_features(tree, query_id, treatment_id,tree_depth, query_o
 
     # initialize module_feature_names
     for name in sorted_module_names:
+        
         module_features[name] = [0] * module_feature_counts[name]
         module_counts[name] = 0
         module_outputs[name] = 0
@@ -478,6 +487,7 @@ def process_tree(node, treatment_id, csv_data, query_id, module_feature_names):
     module_name = node["module_name"]
     features = node["features"]
     output = node["output"]
+    
 
     # Update module feature names
     if module_name not in module_feature_names:
