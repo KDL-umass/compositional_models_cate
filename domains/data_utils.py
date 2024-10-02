@@ -21,7 +21,7 @@ def generate_feature(feature_dim=3, data_dist="uniform", seed=None):
         covs = covs @ covs.T + np.eye(feature_dim)
         feature = np.random.multivariate_normal(means, covs)
     elif data_dist == "uniform":
-        feature = np.random.uniform(0, 1, feature_dim)
+        feature = np.random.uniform(0, 3, feature_dim)
     return feature
 
 def build_tree_systematically(modules, depth, used_modules, data_dist="uniform", covariates_shared=False, input_features=None, feature_dim=3, max_depth=5):

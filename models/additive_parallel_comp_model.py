@@ -141,6 +141,8 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
         # split the data into train and test
         train_data[module_file] = module_df[module_df["query_id"].isin(train_qids)]
         test_data[module_file] = module_df[module_df["query_id"].isin(test_qids)]
+    
+    
         
     for module_file in module_files:
         train_df = train_data[module_file]
@@ -149,6 +151,8 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
         treatment = "treatment_id"
         outcome = "output"
         input_dim = len(covariates)
+        if input_dim > hidden_dim:
+            hidden_dim = (input_dim + 1)*2
         if underlying_model_class == "MLP":
             expert_model = BaselineModel(input_dim + 1, hidden_dim, output_dim)
         else:
@@ -169,9 +173,11 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     additive_estimated_effects_test = {}
     modules_csvs_train = {}
     modules_csvs_test = {}
+    modules_train_sizes = {}
     for module_file in module_files:
         module_name = module_file.split(".")[0]
         train_df = train_data[module_file]
+        modules_train_sizes[module_name] = len(train_df)
         test_df = test_data[module_file]
         module_causal_effect_dict_train = get_ground_truth_effects(module_data[module_file], train_qids, treatment_col="treatment_id", outcome_col="output")
         module_causal_effect_dict_test = get_ground_truth_effects(module_data[module_file], test_qids, treatment_col="treatment_id", outcome_col="output")
@@ -242,4 +248,4 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     print(additive_combined_train_df.head())
     print(additive_combined_test_df.head())
 
-    return additive_combined_train_df, additive_combined_test_df, modules_csvs_train, modules_csvs_test
+    return additive_combined_train_df, additive_combined_test_df, modules_csvs_train, modules_csvs_test, modules_train_sizes

@@ -20,6 +20,83 @@ import torch.nn as nn
 # Convert to float64 for higher precision
 
 # script to generate synthetic data for the causal effect estimation experiments
+
+coeffs = {
+ '1': {0: [ 0.21667   , -0.63903564,  9.00922865],
+  1: [0.12936905, 0.2799703 , 6.57174534]},
+ '2': {0: [ 0.30264717, -1.25032706,  9.94655612],
+  1: [0.16302046, 1.00160131, 4.64935063]},
+ '3': {0: [0.01939968, 0.02394197, 9.47095968],
+  1: [0.02878614, 0.03671678, 8.68403881]},
+ '4': {0: [ 0.22816887, -0.77317096,  9.38126938],
+  1: [0.14832781, 0.1123053 , 6.89397014]},
+ '5': {0: [ 0.21146381, -0.56553982,  8.49733234],
+  1: [ 0.29130791, -0.41326397,  8.49733234]},
+ '6': {0: [0.13604885, 0.41398028, 9.26971561],
+  1: [ 0.27753554, -0.14679641,  9.01205926]},
+ '7': {0: [ 0.21259568, -0.43276121, 10.05956736],
+  1: [0.20716442, 0.60688892, 6.5829069 ]},
+ '8': {0: [ 0.19895964, -0.46852413, 10.8638669 ],
+  1: [ 0.33923464, -1.1632891 , 11.31139315]},
+ '9': {0: [ 0.03409934, -0.05973316,  8.11280246],
+  1: [-0.03727203,  0.68611027,  5.90218791]},
+ '10': {0: [0.04776045, 1.34701657, 8.06038158],
+  1: [0.16713525, 0.98506548, 7.36645402]}
+}
+
+def f1_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return np.dot(X, w[:Mj]) + w[-1]
+
+def f2_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return np.dot(X**2, w[:Mj]) + np.dot(X, w[Mj:2*Mj]) + w[-1]
+
+def f3_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * (np.sin(np.pi * np.dot(X, w[1:Mj+1])) / 2 + 0.5) + w[-1]
+
+def f4_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] / (1 + np.exp(-np.dot(X, w[1:Mj+1]))) + w[-1]
+
+def f5_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * np.sqrt(np.dot(X, w[1:Mj+1])) + w[-1]
+
+def f6_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * (1 - np.dot(X**3, w[1:Mj+1])) + w[-1]
+
+def f7_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * (0.5 * np.cos(2 * np.pi * np.dot(X, w[1:Mj+1])) + 0.5) + w[-1]
+
+def f8_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * np.exp(-np.dot(X, w[1:Mj+1])) / (1 + np.exp(-np.dot(X, w[1:Mj+1]))) + w[-1]
+
+def f9_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * np.log(np.dot(X, w[1:Mj+1]) + 1) / np.log(2) + w[-1]
+
+def f10_module(*inputs, w):
+    X = np.array(inputs)
+    Mj = len(X)
+    return w[0] * (0.5 * np.tanh(np.dot(X, w[1:Mj+1]) - 2) + 0.5) + w[-1]
+
+def polyval_module(*inputs, w):
+    return np.polyval(w, inputs)[0]
+
 def quadratic_module(*inputs, w):
     # take all the inputs
     X = np.array(inputs)
@@ -51,7 +128,12 @@ def mlp_module(*inputs, model):
 def logarithmic_module(*inputs, w):
     X = np.array(inputs)
     Mj = len(X)
-    y = np.sum(w[:Mj] * np.log(np.abs(X) + 1)) + w[-1]
+    # take log of absolute value of X + 1
+    X_log = np.log(np.abs(X) + 1)
+    w = np.array(w)
+    y = np.dot(X_log, w[:Mj]) + w[-1]
+    # exponential function
+    y = np.exp(y)
     return y
 
 def sigmoid_module(*inputs, w):
@@ -89,7 +171,8 @@ class SyntheticDataSampler:
         use_subset_features = False,
         run_env = "local",
         systematic = False,
-        trees_per_group = 2000
+        trees_per_group = 2000,
+        test_size = 0.2
     ):
         self.num_modules = num_modules
         print("num_modules: ", num_modules)
@@ -119,6 +202,7 @@ class SyntheticDataSampler:
         self.use_subset_features = use_subset_features
         self.trees_per_group = trees_per_group
         self.systematic = systematic
+        
         self.initialize_folders()
 
         
@@ -230,6 +314,9 @@ class SyntheticDataSampler:
             
             if module_type == 'mlp':
                 self.module_params_dict[module_id] = {"model": model}
+            elif module_type == 'polyval':
+                    w = coeffs[str(module_id)][treatment_id]
+                    self.module_params_dict[module_id] = {"w": w}
             else:
                 self.module_params_dict[module_id] = {"w": w.tolist()}
 
@@ -384,7 +471,7 @@ class SyntheticDataSampler:
         with open("{}/treatment_assignments.json".format(obs_folder), "w") as f:
             json.dump(treatment_assignments, f, indent=4)
 
-    def create_iid_ood_split(self, split_type = "iid", test_size = 0.4):
+    def create_iid_ood_split(self, split_type = "iid", test_size = 0.4, test_on_last_depth = False):
         high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
         # iid split just involves evenly splitting the data for each depth
         # open the file
@@ -397,6 +484,9 @@ class SyntheticDataSampler:
         depths = grouped["tree_depth"].unique()
         split_idx = int(len(depths) * (1 - test_size))
         train_depths, test_depths = depths[:split_idx], depths[split_idx:]
+        if test_on_last_depth:
+            test_depths = [depths[-1]]
+
         print("train depths: ", train_depths)
         print("test depths: ", test_depths)
         split_dict = {"train": [], "test": []}
