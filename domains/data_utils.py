@@ -424,9 +424,21 @@ def expand_features(tree_dict):
     tree_dict["feature_names"] = expanded_feature_names
 
     return tree_dict
+
+def add_order_of_modules(tree_dict):
+    # traverse the tree and return the order of modules
+    if tree_dict is None:
+        return []
+    order_of_modules = [tree_dict["module_id"]]
+    if tree_dict["children"] is None:
+        return order_of_modules
+    for child in tree_dict["children"]:
+        order_of_modules.extend(add_order_of_modules(child))
+    return order_of_modules
     
 
-def process_high_level_features(tree, query_id, treatment_id,tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence):
+def process_high_level_features(tree, query_id, treatment_id,tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence, order_of_modules=None):
+    
     module_counts = {}
     module_features = {}
     module_outputs = {}
@@ -442,6 +454,7 @@ def process_high_level_features(tree, query_id, treatment_id,tree_depth, query_o
         # print(node)
         module_name = node['module_name']
         module_counts[module_name] += 1
+        # print(module_name, module_counts[module_name], node["features"], node["feature_names"], module_features[module_name])
         for i, feature in enumerate(node['features']):
             if isinstance(feature, (int, float)):
                 # print(node['features'], module_features[module_name])
@@ -455,8 +468,11 @@ def process_high_level_features(tree, query_id, treatment_id,tree_depth, query_o
                 collect_features(child)
 
     collect_features(tree)
-    
-    high_level_row = [query_id, treatment_id, tree_depth]
+    if order_of_modules is None:
+        high_level_row = [query_id, treatment_id, tree_depth]
+    else:
+        order_of_modules_str = "_".join([str(module_id) for module_id in order_of_modules])
+        high_level_row = [query_id, treatment_id, tree_depth, order_of_modules_str]
     high_level_row += [module_counts[module] for module in sorted_module_names]
     
     if exactly_one_occurrence:
@@ -492,7 +508,38 @@ def process_tree(node, treatment_id, csv_data, query_id, module_feature_names):
     # Update module feature names
     if module_name not in module_feature_names:
         module_feature_names[module_name] = node["feature_names"]
+    else:
+        if module_feature_names[module_name] != node["feature_names"]:
+            
+            # print(f"Feature names for module {module_name} do not match.")
+            # print(f"Existing feature names: {module_feature_names[module_name]}")
+            # print(f"New feature names: {node['feature_names']}")
+            # add new features to the module_feature_names keeping the order
+            new_features = [feature for feature in node["feature_names"] if feature not in module_feature_names[module_name]]
+            
 
+            # add 0 to the features of the module in the csv data at the correct position from second last position
+            if len(new_features) > 0:
+                # print(f"Current feature names for module {module_name}: {module_feature_names[module_name]}")
+                # print(f"Adding new features to module {module_name}: {new_features}")
+                print(f"Ordering of new features: {node['feature_names']}")
+                module_feature_names[module_name] += new_features
+                print(f"Updated feature names for module {module_name}: {module_feature_names[module_name]}")
+                # arrange the features in node["features"] in the same order as module_feature_names[module_name]
+                for csv_row in csv_data[module_name]:
+                    for i, new_feature in enumerate(new_features):
+                        position = len(module_feature_names[module_name]) - len(new_features) + i + 2
+                        csv_row.insert(position, 0)
+
+            ordered_features = []
+            for feature_name in module_feature_names[module_name]:
+                if feature_name in node["feature_names"]:
+                    index = node["feature_names"].index(feature_name)
+                    ordered_features.append(features[index])
+                else:
+                    ordered_features.append(0)
+            features = ordered_features
+                
 
     # Prepare CSV data for the current module
     csv_row = [query_id, treatment_id] + features + [output]
@@ -512,6 +559,7 @@ def process_trees_and_create_module_csvs(data_folders, csv_folder, source="proce
     csv_data = {}
     module_feature_names = {}
     all_modules = set()
+    
     if source == "json":
         for folder in data_folders:
             for filename in os.listdir(folder):
@@ -527,6 +575,19 @@ def process_trees_and_create_module_csvs(data_folders, csv_folder, source="proce
 
                             process_tree(tree, treatment_id, csv_data, query_id, module_feature_names)
                             all_modules.update(csv_data.keys())
+                elif filename.endswith(".json"):
+                    file_path = os.path.join(folder, filename)
+                    
+                    with open(file_path, "r") as file:
+                        json_tree = json.load(file)
+                        treatment_id = json_tree["treatment_id"]
+                        # print(file_path)
+                        # print(treatment_id)
+                        query_id = json_tree["query_id"]
+                        tree = json_tree["json_tree"]
+
+                        process_tree(tree, treatment_id, csv_data, query_id, module_feature_names)
+                        all_modules.update(csv_data.keys())
     elif source == "processed":
         for i, treatment_tree_dicts in enumerate(data_folders):
             for input_dict in treatment_tree_dicts:
@@ -550,12 +611,14 @@ def process_trees_and_create_module_csvs(data_folders, csv_folder, source="proce
             writer.writerows(data)
 
     sorted_module_names = sorted(all_modules)
+    
     module_feature_counts = {module: len(feature_names) for module, feature_names in module_feature_names.items()}
+    
     
     return sorted_module_names, module_feature_names, module_feature_counts
 
 
-def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence=False, domain="synthetic_data", source="processed"):
+def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence=False, domain="synthetic_data", source="processed", composition_type="hierarchical"):
     high_level_data = []
 
     if source == "json":
@@ -576,10 +639,12 @@ def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_mod
                             tree_node = ExpressionNode.from_dict(tree)
                         elif domain == "query_execution":
                             tree_node = QueryPlanNode.from_dict(tree)
-                        elif domain == "synthetic_data":
+                        elif domain in ["synthetic_data", "simulation_manufacturing"]:
                             tree_node = Node.from_dict(tree)
                         
                         tree_depth = tree_node.get_depth()
+                        if "order_of_modules" in json_tree:
+                            order_of_modules = json_tree["order_of_modules"]
 
                     high_level_row = process_high_level_features(tree, query_id, treatment_id, tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence)
                     
@@ -601,12 +666,17 @@ def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_mod
                     tree_node = ExpressionNode.from_dict(tree)
                 elif domain == "query_execution":
                     tree_node = QueryPlanNode.from_dict(tree)
-                elif domain == "synthetic_data":
+                elif domain in ["synthetic_data", "simulation_manufacturing"]:
                     tree_node = Node.from_dict(tree)
                 
                 tree_depth = tree_node.get_depth()
-
-                high_level_row = process_high_level_features(tree, query_id, treatment_id, tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence)
+                
+                if "order_of_modules" in input_dict:
+                    order_of_modules = input_dict["order_of_modules"]
+                    high_level_row = process_high_level_features(tree, query_id, treatment_id, tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence, order_of_modules)
+                else:
+                    high_level_row = process_high_level_features(tree, query_id, treatment_id, tree_depth, query_output, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence)
+                
 
                 if domain == "maths_evaluation":
                     matrix_size = int(query_id.split("_")[1])
@@ -619,7 +689,10 @@ def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_mod
     high_level_csv_path = os.path.join(csv_folder, high_level_csv_filename)
     with open(high_level_csv_path, "w", newline='') as file:
         writer = csv.writer(file)
-        columns = ["query_id", "treatment_id", "tree_depth"]
+        if composition_type == "hierarchical":
+            columns = ["query_id", "treatment_id", "tree_depth", "order_of_modules"]
+        else:
+            columns = ["query_id", "treatment_id", "tree_depth"]
         columns += [f"num_module_{module_name}" for module_name in sorted_module_names]
         columns += [f"module_{module_name}_feature_{feature_name}" for module_name in sorted_module_names for feature_name in module_feature_names[module_name]]
         columns += [f"module_{module_name}_output" for module_name in sorted_module_names]
@@ -629,11 +702,11 @@ def process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_mod
         writer.writerow(columns)
         writer.writerows(high_level_data)
 
-def process_trees_and_create_csvs(data_folders, csv_folder, config_folder, exactly_one_occurrence=False, domain="synthetic_data", source="processed"):
+def process_trees_and_create_csvs(data_folders, csv_folder, config_folder, exactly_one_occurrence=False, domain="synthetic_data", source="processed", composition_type="hierarchical"):
     # first process the trees and create module csvs
     sorted_module_names, module_feature_names, module_feature_counts = process_trees_and_create_module_csvs(data_folders, csv_folder, source=source)
     # then process the trees and create high level csv
-    process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence, domain=domain, source=source)
+    process_trees_and_create_high_level_csv(data_folders, csv_folder, sorted_module_names, module_feature_names, module_feature_counts, exactly_one_occurrence, domain=domain, source=source, composition_type=composition_type)
 
     # create a config file with the domain name and save module names and feature names and feature counts
     config = {}
