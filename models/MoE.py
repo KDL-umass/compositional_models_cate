@@ -57,9 +57,6 @@ class MoE(nn.Module):
         self.gate = create_gate_model(input_dim, num_experts)
         # define an aggregation model that combines the outputs of the experts
 
-        
-
-
     # define the forward method
     def forward(self, x):
         expert_outputs = torch.stack([expert(x) for expert in self.experts], dim=1)

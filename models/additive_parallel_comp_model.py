@@ -92,10 +92,7 @@ def scale_module_data(module_df, scaler_path, module_id):
     
     return module_df
 
-
-
-
-def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale = True, scaler_path=None, bias_strength=0):
+def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale = True, scaler_path=None, bias_strength=0, domain="synthetic_data"):
     module_files = os.listdir(f"{csv_path}/")
     
     module_files = [x for x in module_files if "module" in x]
@@ -115,6 +112,8 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     test_data = {}
     for module_file in module_files:
         module_df = module_data[module_file]
+        if domain == "simulation_manufacturing":
+            module_df["demand"] = module_df["query_id"].apply(lambda x: int(x.split("_")[1]))
 
         if scale == True:
             # load the input and output scalers
@@ -142,12 +141,14 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
         train_data[module_file] = module_df[module_df["query_id"].isin(train_qids)]
         test_data[module_file] = module_df[module_df["query_id"].isin(test_qids)]
     
-    
-        
     for module_file in module_files:
         train_df = train_data[module_file]
         test_df = test_data[module_file]
-        covariates = [x for x in train_df.columns if "feature" in x]
+        if domain == "synthetic_data":
+            covariates = [x for x in train_df.columns if "feature" in x]
+        else:
+            covariates = [x for x in train_df.columns if "output" not in x and "query_id" not in x and "treatment_id" not in x]
+        print(module_file, covariates)
         treatment = "treatment_id"
         outcome = "output"
         input_dim = len(covariates)
@@ -249,3 +250,112 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     print(additive_combined_test_df.head())
 
     return additive_combined_train_df, additive_combined_test_df, modules_csvs_train, modules_csvs_test, modules_train_sizes
+
+
+def get_sequential_model_effects(csv_path, obs_data_path, train_qids, test_qids, module_order, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale=True, scaler_path=None, bias_strength=0, domain="synthetic_data", model_misspecification=False):
+    all_modules = set(module for order in module_order.values() for module in order)
+    module_files = [f"module_{m}.csv" for m in all_modules]
+
+    # Read all the module files
+    module_data = {f: pd.read_csv(os.path.join(csv_path, f)).sort_values("query_id") for f in module_files}
+
+    with open(os.path.join(obs_data_path, f"feature_sum_{bias_strength}", "treatment_assignments.json"), "r") as f:
+        query_id_treatment_id = json.load(f)
+
+    train_data, test_data = {}, {}
+    for module_file in module_files:
+        module_df = module_data[module_file]
+        
+        if domain == "simulation_manufacturing":
+            module_df["demand"] = module_df["query_id"].apply(lambda x: int(x.split("_")[1]))
+
+        if scale:
+            module_id = module_file.split(".")[0].split("_")[-1]
+            module_input_scaler = pickle.load(open(f"{scaler_path}/input_scaler_{module_id}.pkl", "rb"))
+            module_output_scaler = pickle.load(open(f"{scaler_path}/output_scaler_{module_id}.pkl", "rb"))
+            module_feature_names = [x for x in module_df.columns if "feature" in x]
+            module_df[["output"]] = module_output_scaler.transform(module_df[["output"]].values.reshape(-1, 1))
+            module_df[module_feature_names] = module_input_scaler.transform(module_df[module_feature_names])
+
+        module_df["assigned_treatment_id"] = module_df["query_id"].apply(lambda x: query_id_treatment_id[str(x)])
+        module_df = module_df[module_df["treatment_id"] == module_df["assigned_treatment_id"]].drop("assigned_treatment_id", axis=1)
+        
+        train_data[module_file] = module_df[module_df["query_id"].isin(train_qids)]
+        test_data[module_file] = module_df[module_df["query_id"].isin(test_qids)]
+
+    # Train models
+    trained_models = {}
+    for module_file in module_files:
+        train_df = train_data[module_file]
+        if domain == "synthetic_data":
+            covariates = [x for x in train_df.columns if "feature" in x or x == "child_output"]
+            if model_misspecification:
+                covariates = [x for x in covariates if "feature_0" not in x]
+        else:
+            covariates = [x for x in train_df.columns if x not in ["output", "query_id", "treatment_id"]]
+
+        treatment = "treatment_id"
+        outcome = "output"
+        print(module_file, covariates)
+        input_dim = len(covariates)
+        if input_dim > hidden_dim:
+            hidden_dim = (input_dim + 1) * 2
+
+        if underlying_model_class == "MLP":
+            expert_model = BaselineModel(input_dim + 1, hidden_dim, output_dim)
+        else:
+            expert_model = BaselineLinearModel(input_dim + 1, output_dim)
+
+        expert_model, _, _ = train_model(expert_model, train_df, covariates, treatment, outcome, epochs, batch_size)
+        trained_models[module_file] = expert_model
+
+    # Prediction
+    def predict_sequential(data, models, module_order):
+        predictions = {}
+        for query_id, order in module_order.items():
+            query_predictions = {}
+            for i, module_num in enumerate(order):
+                module_file = f"module_{module_num}.csv"
+                model = models[module_file]
+                df = data[module_file][data[module_file]["query_id"] == query_id]
+                
+                if domain == "synthetic_data":
+                    covariates = [x for x in df.columns if "feature" in x or x == "child_output"]
+                    if model_misspecification:
+                        covariates = [x for x in covariates if "feature_0" not in x]
+                else:
+                    covariates = [x for x in df.columns if x not in ["output", "query_id", "treatment_id"]]
+                # print(module_file, covariates)
+                if i > 0:
+                    # Update child_output with the prediction from the previous module
+                    df = df.copy()
+                    df["child_output"] = query_predictions[order[i-1]]
+                
+                query_predictions[module_num] = predict_model(model, df, covariates)[0]
+            
+            predictions[query_id] = query_predictions[order[-1]]
+        
+        return predictions
+
+    # Compute predictions
+    train_predictions = predict_sequential(train_data, trained_models, {qid: module_order[qid] for qid in train_qids})
+    test_predictions = predict_sequential(test_data, trained_models, {qid: module_order[qid] for qid in test_qids})
+
+    # Prepare results
+    def prepare_results(qids, predictions, ground_truth_data):
+        results = []
+        for qid in qids:
+            last_module = module_order[qid][-1]
+            ground_truth = ground_truth_data[f"module_{last_module}.csv"]
+            ground_truth_effect = get_ground_truth_effects(ground_truth, [qid], treatment_col="treatment_id", outcome_col="output")[qid]
+            results.append({
+                "query_id": qid,
+                "ground_truth_effect": ground_truth_effect,
+                "estimated_effect": predictions[qid]
+            })
+        return pd.DataFrame(results)
+
+    train_results = prepare_results(train_qids, train_predictions, module_data)
+    test_results = prepare_results(test_qids, test_predictions, module_data)
+
+    return train_results, test_results

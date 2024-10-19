@@ -1,6 +1,6 @@
 import sys 
 sys.path.append("../")
-from domains.data_utils import generate_input_trees, simulate_outcome, process_trees_and_create_csvs, expand_features, observational_sampling
+from domains.data_utils import generate_input_trees, simulate_outcome, process_trees_and_create_csvs, expand_features, observational_sampling, add_order_of_modules
 from domains.tree_data_structures import Node, ExpressionNode, QueryPlanNode
 import numpy as np
 import random
@@ -364,6 +364,7 @@ class SyntheticDataSampler:
             input_processed_tree_dict, query_output = simulate_outcome(input_tree, treatment_id, self.module_functions, self.module_params_dict, self.max_depth, self.feature_dim, self.composition_type, self.use_subset_features)
             if self.composition_type == "hierarchical":
                 input_processed_tree_dict = expand_features(input_processed_tree_dict)
+                order_of_modules = add_order_of_modules(input_processed_tree_dict)
             input_dict = {}
             
             # save weights for all modules except mlp
@@ -374,6 +375,8 @@ class SyntheticDataSampler:
             input_dict["json_tree"] = input_processed_tree_dict
             input_dict["query_output"] = query_output
             input_dict["feature_dim"] = self.feature_dim
+            if self.composition_type == "hierarchical":
+                input_dict["order_of_modules"] = order_of_modules
             if treatment_id == 0:
                 self.processed_trees_0.append(input_dict)
             else:
@@ -413,9 +416,9 @@ class SyntheticDataSampler:
             #     json.dump(input_dict, f, indent=4)
     def save_csvs(self, source="processed"):
         if source == "json":
-            process_trees_and_create_csvs(self.json_folders, self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain, source="json")
+            process_trees_and_create_csvs(self.json_folders, self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain, source="json",composition_type=self.composition_type)
         elif source == "processed":
-            process_trees_and_create_csvs([self.processed_trees_0, self.processed_trees_1], self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain,source="processed")
+            process_trees_and_create_csvs([self.processed_trees_0, self.processed_trees_1], self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain,source="processed", composition_type=self.composition_type)
 
     def simulate_data(self):
         if self.resample:
@@ -515,6 +518,195 @@ class SyntheticDataSampler:
         with open("{}/train_test_split_qids.json".format(split_folder), "w") as f:
             json.dump(split_dict, f, indent=4)
 
+
+class ManufacturingDataSampler:
+    # make it inherit from the SyntheticDataSampler
+    def __init__(
+        self, 
+        domain = "simulation_manufacturing",
+        run_env = "local",
+        
+        trees_per_group = 2000,
+        test_size = 0.2,
+        resample = False
+    ):
+        
+        self.domain = domain
+        self.run_env = run_env
+        if self.run_env == "local":
+            self.base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+        else:
+            self.base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
+        self.trees_per_group = trees_per_group
+        
+        self.test_size = test_size
+        self.resample = resample
+        self.initialize_folders()
+
+        
+    def initialize_folders(self):
+            # make path if doesn't exist
+        self.data_path = "{}/{}/jsons/".format(self.base_dir, self.domain)
+        folder_0 = "data_0"
+        folder_1 = "data_1"
+        self.path_0 = "{}/{}".format(self.data_path, folder_0)
+        self.path_1 = "{}/{}".format(self.data_path, folder_1)
+        if not os.path.exists(self.path_0):
+            os.makedirs(self.path_0)
+        else:
+            # remove whole folder
+            if self.resample:
+                print("Reinitializing path 0")
+                shutil.rmtree(self.path_0)
+                os.makedirs(self.path_0, exist_ok=True)
+        if not os.path.exists(self.path_1):
+            os.makedirs(self.path_1)
+        else:
+            if self.resample:
+                print("Reinitializing path 1")
+                shutil.rmtree(self.path_1)
+                os.makedirs(self.path_1, exist_ok=True)
+
+        self.csv_folder = "{}/{}/csvs/".format(self.base_dir, self.domain)
+        if not os.path.exists(self.csv_folder):
+            os.makedirs(self.csv_folder)
+        else:
+            if self.resample:
+                print("Reinitializing csv folder")
+                shutil.rmtree(self.csv_folder)
+                os.makedirs(self.csv_folder, exist_ok=True)
+        self.json_folders = [self.path_0, self.path_1]
+
+        self.obs_csv_folder = "{}/{}/observational_data/".format(self.base_dir, self.domain)
+        if not os.path.exists(self.obs_csv_folder):
+            os.makedirs(self.obs_csv_folder)
+
+        self.plot_folder = "{}/{}/plots/".format(self.base_dir, self.domain)
+        if not os.path.exists(self.plot_folder):
+            os.makedirs(self.plot_folder)
+
+        self.config_folder = "{}/{}/config/".format(self.base_dir, self.domain)
+        if not os.path.exists(self.config_folder):
+            os.makedirs(self.config_folder)
+
+    def preprocess_and_save_jsons(self, output_key):
+        def assign_scalar_output(node, key):
+            node.output = node.output[key]
+            for child in node.children:
+                assign_scalar_output(child, key)
+        
+        def multiply_features_by_output(node):
+            new_features = []
+            for feature in node.features:
+                new_features.append(feature * (node.output["Total_WIPs_produced"] + node.output["total_scrap_produced"]))
+            node.features = new_features
+            for child in node.children:
+                multiply_features_by_output(child)
+        
+        orig_data_dir = "{}/{}/raw_data".format(self.base_dir, self.domain)
+        dirs = os.listdir(orig_data_dir)
+        out_dir = self.data_path
+        for dir in dirs:
+            if dir == "workers05":
+                out_dir_name = self.path_0
+            elif dir == "workers10":
+                out_dir_name = self.path_1
+            scenarios = os.listdir(os.path.join(orig_data_dir, dir))
+            for scenario in scenarios:
+                # json files
+                json_files = os.listdir(os.path.join(orig_data_dir, dir, scenario))
+                for jf in json_files:
+                    if jf.endswith('.json'):
+                        with open(os.path.join(orig_data_dir, dir, scenario, jf)) as f:
+                            data = json.load(f)
+                        demand = jf.split('_')[2].split('.')[0]
+                        scenario_id = scenario.split('_')[1]
+                        data["query_id"] = f"{scenario_id}_{demand}"
+                        data["scenario_id"] = scenario_id
+                        data["treatment_id"] = 0 if dir == "workers05" else 1
+                        data["demand"] = demand
+
+                        tree = data["json_tree"]
+                        root = Node.from_dict(tree)
+                        multiply_features_by_output(root)
+                        assign_scalar_output(root, output_key)
+                        
+                        data["json_tree"] = root.to_dict()
+                        data["query_output"] = root.output
+                        
+
+                        
+                    # save json
+                    out_path = os.path.join(out_dir, out_dir_name)
+                    if not os.path.exists(out_path):
+                        os.makedirs(out_path)
+                    out_file = os.path.join(out_dir, out_dir_name, f"input_tree_{scenario_id}_{demand}.json")
+                    with open(out_file, 'w') as f:
+                        json.dump(data, f, indent=4)
+
+    def create_csvs(self):
+        process_trees_and_create_csvs(self.json_folders, self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain, source="json")
+
+    def create_observational_data(self, biasing_covariate, bias_strength):
+        high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
+        # open the file
+        filepath = "{}/{}".format(self.csv_folder, high_level_csv_filename)
+        
+        with open(filepath, "r") as f:
+            df_apo = pd.read_csv(filepath)
+        
+        df_sampled, df_cf_sampled, treatment_assignments = observational_sampling(df_apo, biasing_covariate, bias_strength, plot_folder = self.plot_folder)
+        obs_folder = "{}/{}_{}/".format(self.obs_csv_folder, biasing_covariate, bias_strength)
+        if not os.path.exists(obs_folder):
+            os.makedirs(obs_folder)
+        df_sampled.to_csv("{}/df_sampled.csv".format(obs_folder), index=False)
+        df_cf_sampled.to_csv("{}/df_cf_sampled.csv".format(obs_folder), index=False)
+        print(obs_folder)
+
+        # save treatment assignments as json
+        with open("{}/treatment_assignments.json".format(obs_folder), "w") as f:
+            json.dump(treatment_assignments, f, indent=4)
+
+    def create_iid_ood_split(self, split_type = "iid", test_size = 0.2):
+        high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
+        # iid split just involves evenly splitting the data for each depth
+        # open the file
+        filepath = "{}/{}".format(self.csv_folder, high_level_csv_filename)
+        with open(filepath, "r") as f:
+            df_apo = pd.read_csv(filepath)
+        
+        grouped = df_apo.groupby('tree_depth')['query_id'].agg(list).reset_index()
+        # all depths 
+        depths = grouped["tree_depth"].unique()
+        split_idx = int(len(depths) * (1 - test_size))
+        train_depths, test_depths = depths[:split_idx], depths[split_idx:]
+        print("train depths: ", train_depths)
+        print("test depths: ", test_depths)
+        split_dict = {"train": [], "test": []}
+        for i, row in grouped.iterrows():
+            query_ids = row["query_id"]
+            if split_type == "iid":
+                train_ids = random.sample(query_ids, int(0.8*len(query_ids)))
+                test_ids = [query_id for query_id in query_ids if query_id not in train_ids]
+                split_dict["train"].extend(train_ids)
+                split_dict["test"].extend(test_ids)
+            elif split_type == "ood":
+                # sort all depth query ids
+                if row["tree_depth"] in train_depths:
+                    train_ids = query_ids
+                    split_dict["train"].extend(train_ids)
+                else:
+                    test_ids = query_ids
+                    split_dict["test"].extend(test_ids)
+            
+
+        # save it in main folder
+        split_folder = "{}/{}".format(self.csv_folder, split_type)
+        if not os.path.exists(split_folder):
+            os.makedirs(split_folder)
+
+        with open("{}/train_test_split_qids.json".format(split_folder), "w") as f:
+            json.dump(split_dict, f, indent=4)
 
 class MathsEvaluationDataSampler:
     def __init__(
@@ -858,42 +1050,49 @@ class QueryExecutionDataSampler:
     def save_csvs(self):
         process_trees_and_create_csvs(self.json_folders, self.csv_folder, self.config_folder, exactly_one_occurrence=False, domain=self.domain)
 
+    
+
 
 if __name__ == "__main__":
 
+    # test the manufacturing data sampler
+    sampler = ManufacturingDataSampler(resample=True)
+    sampler.preprocess_and_save_jsons("throughput")
+    sampler.create_csvs()
+
     # # test the synthetic data sampler
-    num_modules = 10
-    feature_dim = 3
-    composition_type = "parallel"
-    fixed_structure = True
-    max_depth = num_modules
-    num_trees = 5000
-    seed = 42
-    module_function_type = "mlp"
-    resample = True
-    covariates_shared = True
-    use_subset_features = False
-    run_env = "local"
-    heterogeneity = 1
-    data_dist = "uniform"
-    systematic = True
-    domain = "synthetic_data"
-    sampler = SyntheticDataSampler(num_modules=num_modules, feature_dim=feature_dim, composition_type=composition_type, fixed_structure=fixed_structure, max_depth=max_depth, num_trees=num_trees, seed=seed, module_function_type=module_function_type, resample=resample, covariates_shared=covariates_shared, use_subset_features=use_subset_features, run_env=run_env, heterogeneity=heterogeneity, data_dist=data_dist, systematic=systematic)
-    sampler.simulate_data()
+    # num_modules = 10
+    # feature_dim = 3
+    # composition_type = "parallel"
+    # fixed_structure = True
+    # max_depth = num_modules
+    # num_trees = 5000
+    # seed = 42
+    # module_function_type = "mlp"
+    # resample = True
+    # covariates_shared = True
+    # use_subset_features = False
+    # run_env = "local"
+    # heterogeneity = 1
+    # data_dist = "uniform"
+    # systematic = True
+    # domain = "synthetic_data"
+    # sampler = SyntheticDataSampler(num_modules=num_modules, feature_dim=feature_dim, composition_type=composition_type, fixed_structure=fixed_structure, max_depth=max_depth, num_trees=num_trees, seed=seed, module_function_type=module_function_type, resample=resample, covariates_shared=covariates_shared, use_subset_features=use_subset_features, run_env=run_env, heterogeneity=heterogeneity, data_dist=data_dist, systematic=systematic)
+    # sampler.simulate_data()
 
-    if run_env == "local":
-        base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
-    else:
-        base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
+    # if run_env == "local":
+    #     base_dir = "/Users/ppruthi/research/compositional_models/compositional_models_cate/domains"
+    # else:
+    #     base_dir = "/work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/domains"
 
-    main_dir = f"{base_dir}/{domain}"
-    csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
-    obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
-    data_path = f"{csv_path}/{domain}_data_high_level_features.csv"
-    data = pd.read_csv(data_path)
+    # main_dir = f"{base_dir}/{domain}"
+    # csv_path = f"{main_dir}/csvs/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
+    # obs_data_path = f"{main_dir}/observational_data/fixed_structure_{fixed_structure}_outcomes_{composition_type}_systematic_{systematic}"
+    # data_path = f"{csv_path}/{domain}_data_high_level_features.csv"
+    # data = pd.read_csv(data_path)
 
-    # print unique values of tree depth
-    print(data["tree_depth"].unique())
+    # # print unique values of tree depth
+    # print(data["tree_depth"].unique())
 
 
 
