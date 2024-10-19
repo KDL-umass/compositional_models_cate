@@ -417,7 +417,7 @@ class SyntheticDataSampler:
         with open("{}/treatment_assignments.json".format(obs_folder), "w") as f:
             json.dump(treatment_assignments, f, indent=4)
 
-    def create_iid_ood_split(self, split_type = "iid", test_size = 0.4, test_on_last_depth = False, ood_type = "depth"):
+    def create_iid_ood_split(self, split_type = "iid", num_train_modules=1, test_on_last_depth = False, ood_type = "depth"):
         high_level_csv_filename = "{}_data_high_level_features.csv".format(self.domain)
         # iid split just involves evenly splitting the data for each depth
         # open the file
@@ -430,7 +430,8 @@ class SyntheticDataSampler:
         # all depths 
         depths = grouped["tree_depth"].unique()
         if split_type == "ood":
-            split_idx = int(len(depths) * (1 - test_size))
+            split_idx = int(num_train_modules)
+            print("split_idx: ", split_idx)
             train_depths, test_depths = depths[:split_idx], depths[split_idx:]
             if test_on_last_depth:
                 test_depths = [depths[-1]]

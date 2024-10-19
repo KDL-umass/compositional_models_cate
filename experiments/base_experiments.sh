@@ -13,7 +13,7 @@ cd /work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/experim
 
 # Path to your Python script
 # PYTHON_SCRIPT="test_base_hypotheses_modularized.py"
-PYTHON_SCRIPT="test_function_complexity_shared_covariates.py"
+PYTHON_SCRIPT="sequential_compositional_generalization.py"
 cmd="python $PYTHON_SCRIPT"
 echo "Running: $cmd"
 eval $cmd

@@ -13,40 +13,40 @@ from domains.synthetic_data_sampler import SyntheticDataSampler
 from models.end_to_end_modular_models import *
 from models.MoE import *
 from models.utils import *
-from main_functions import *
+from exp_utils import *
 warnings.filterwarnings('ignore')
 
 
 args = parse_arguments()
-    
-main_dir, csv_path, obs_data_path, scaler_path = setup_directories(args)
-module_function_types = [f"f{i+1}" for i in range(args.num_modules)]
-sampler = SyntheticDataSampler(args.num_modules, args.num_feature_dimensions, args.composition_type, 
-                                args.fixed_structure, args.num_modules, args.num_samples, args.seed, 
-                                args.data_dist, module_function_types=module_function_types, resample=args.resample,
-                                heterogeneity=args.heterogeneity, covariates_shared=args.covariates_shared, 
-                                use_subset_features=args.use_subset_features, systematic=args.systematic, 
-                                run_env=args.run_env, noise = noise)
-
-# first sample the data and prepare it
-data, df_sampled = simulate_and_prepare_data(args, sampler, csv_path, obs_data_path, scaler_path, test_size=test_size, test_on_last_depth=True)
 
 
 all_results = {}
 all_results_train_size = {}
+noise = 1
+num_train_modules = list(np.arange(1, args.num_modules))
+exp = "CG"
+    
 
-test_sizes = [0.5, 0.4, 0.1]
-exp = args.experiment
-for test_size in test_sizes:
+
+for variable in num_train_modules:
     if exp == "noise":
-        noise = test_size
-        test_size = 0.1
-        variable = noise
+        num_train_modules = args.num_modules - 1
     else:
         noise = 0
-        variable = test_size
     all_results[variable] = {}
     all_results_train_size[variable] = []
+
+    main_dir, csv_path, obs_data_path, scaler_path = setup_directories(args)
+    module_function_types = [f"f{i+1}" for i in range(args.num_modules)]
+    sampler = SyntheticDataSampler(args.num_modules, args.num_feature_dimensions, args.composition_type, 
+                                    args.fixed_structure, args.num_modules, args.num_samples, args.seed, 
+                                    args.data_dist, module_function_types=module_function_types, resample=args.resample,
+                                    heterogeneity=args.heterogeneity, covariates_shared=args.covariates_shared, 
+                                    use_subset_features=args.use_subset_features, systematic=args.systematic, 
+                                    run_env=args.run_env, noise = noise)
+
+    # first sample the data and prepare it
+    data, df_sampled = simulate_and_prepare_data(args, sampler, csv_path, obs_data_path, scaler_path, num_train_modules=variable, test_on_last_depth=True)
     
     if args.composition_type == "hierarchical":
         # do one hot encoding for the order of modules

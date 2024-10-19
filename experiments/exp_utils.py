@@ -2,29 +2,28 @@ import argparse
 import json
 import os
 import warnings
+import sys
 import pandas as pd
 from sklearn.metrics import r2_score
-from domains.samplers import SyntheticDataSampler
-from models.MoE import MoE, MoELinear
+from domains.synthetic_data_sampler import SyntheticDataSampler
 from models.MoE import *
 from models.utils import *
-from models.additive_parallel_comp_model import get_additive_model_effects
 
+warnings.filterwarnings('ignore')
 
 def parse_arguments(jupyter=False):
     parser = argparse.ArgumentParser(description="Train modular neural network architectures and baselines for causal effect estimation")
     parser.add_argument("--domain", type=str, default="synthetic_data", help="Domain")
     parser.add_argument("--biasing_covariate", type=str, default="feature_sum", help="Biasing covariate")
-    parser.add_argument("--bias_strength", type=float, default=10, help="Bias strength")
-    parser.add_argument("--scale", type=bool, default=True, help="Scale data")
+    parser.add_argument("--bias_strength", type=float, default=0, help="Bias strength")
+    parser.add_argument("--scale", type=bool, default=False, help="Scale data")
     parser.add_argument("--num_modules", type=int, default=6, help="Number of modules")
-    parser.add_argument("--num_feature_dimensions", type=int, default=1, help="Number of feature dimensions")
+    parser.add_argument("--num_feature_dimensions", type=int, default=5, help="Number of feature dimensions")
     parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
-    parser.add_argument("--module_function_type", type=str, default="quadratic", help="Module function type")
-    parser.add_argument("--composition_type", type=str, default="parallel", help="Composition type")
+    parser.add_argument("--composition_type", type=str, default="hierarchical", help="Composition type")
     parser.add_argument("--resample", type=bool, default=True, help="Resample data")
-    parser.add_argument("--seed", type=int, default=55, help="Seed for reproducibility")
-    parser.add_argument("--fixed_structure", type=bool, default=True, help="Fixed structure flag")
+    parser.add_argument("--seed", type=int, default=45, help="Seed for reproducibility")
+    parser.add_argument("--fixed_structure", type=bool, default=False, help="Fixed structure flag")
     parser.add_argument("--data_dist", type=str, default="uniform", help="Data distribution")
     parser.add_argument("--heterogeneity", type=float, default=1.0, help="Heterogeneity")
     parser.add_argument("--split_type", type=str, default="ood", help="Split type")
@@ -37,7 +36,7 @@ def parse_arguments(jupyter=False):
     # output_dim
     parser.add_argument("--output_dim", type=int, default=1, help="Output dimension")
     # covariates_shared
-    parser.add_argument("--covariates_shared", type=bool, default=True, help="Covariates shared")
+    parser.add_argument("--covariates_shared", type=bool, default=False, help="Covariates shared")
     # model_class
     parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
     # run_env
@@ -46,8 +45,8 @@ def parse_arguments(jupyter=False):
     parser.add_argument("--use_subset_features", type=bool, default=False, help="Use subset features")
     # generate trees systematically for creating OOD data
     parser.add_argument("--systematic", type=bool, default=True, help="Generate trees systematically")
-
-
+    parser.add_argument("--test_size", type=float, default=0.8, help="Test size")
+    parser.add_argument("--model_misspecification", type=bool, default=False, help="Model misspecification")
     if jupyter:
         args = parser.parse_args([])
     else:
@@ -62,36 +61,40 @@ def setup_directories(args):
     scaler_path = f"{obs_data_path}/{args.biasing_covariate}_{args.bias_strength}/{args.split_type}/scalers"
     return main_dir, csv_path, obs_data_path, scaler_path
 
-def simulate_and_prepare_data(args, sampler, csv_path, obs_data_path, scaler_path):
+def simulate_and_prepare_data(args, sampler, csv_path, obs_data_path, scaler_path, num_train_modules=1, test_on_last_depth=False):
     if args.resample:
         sampler.simulate_data()
-        sampler.create_observational_data(biasing_covariate=args.biasing_covariate, bias_strength=args.bias_strength)
-        sampler.create_iid_ood_split(split_type=args.split_type)
-        sampler.create_scalers(args.split_type, biasing_covariate=args.biasing_covariate, bias_strength=args.bias_strength)
+    sampler.create_observational_data(biasing_covariate=args.biasing_covariate, bias_strength=args.bias_strength)
+    sampler.create_iid_ood_split(split_type=args.split_type, num_train_modules=num_train_modules, test_on_last_depth=test_on_last_depth)
+        
     data = pd.read_csv(f"{csv_path}/{args.domain}_data_high_level_features.csv")
     df_sampled = pd.read_csv(f"{obs_data_path}/{args.biasing_covariate}_{args.bias_strength}/df_sampled.csv")
-    if args.scale:
-        data, df_sampled = scale_df(data, df_sampled, scaler_path, csv_path)
-    
     
     return data, df_sampled
 
-def load_train_test_data(csv_path, args, df_sampled):
+def load_train_test_qids(csv_path, args):
     with open(f"{csv_path}/{args.split_type}/train_test_split_qids.json", "r") as f:
         train_test_qids = json.load(f)
     train_qids, test_qids = train_test_qids["train"], train_test_qids["test"]
+    return train_qids, test_qids
+
+def load_train_test_data(csv_path, args, df_sampled):
+    train_qids, test_qids = load_train_test_qids(csv_path, args)
     train_df = df_sampled[df_sampled["query_id"].isin(train_qids)]
     test_df = df_sampled[df_sampled["query_id"].isin(test_qids)]
     return train_df, test_df, train_qids, test_qids
 
-def train_and_evaluate_model(model, train_df, test_df, covariates, treatment, outcome, epochs, batch_size, train_qids, test_qids):
-    model, _, _ = train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size)
-    train_estimates = predict_model(model, train_df, covariates)
-    test_estimates = predict_model(model, test_df, covariates)
+def train_and_evaluate_model(model, train_df, test_df, covariates, treatment, outcome, epochs, batch_size, train_qids, test_qids,plot=False):
+    model, _, _ = train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, plot=plot)
+    
+    train_estimates = predict_model(model, train_df, covariates, return_effect=True)
+    test_estimates = predict_model(model, test_df, covariates, return_effect=True)
     train_df.loc[:, "estimated_effect"] = train_estimates
     test_df.loc[:, "estimated_effect"] = test_estimates
+    
     estimated_effects_train = get_estimated_effects(train_df, train_qids)
     estimated_effects_test = get_estimated_effects(test_df, test_qids)
+    
     return estimated_effects_train, estimated_effects_test
 
 def train_and_evaluate_catenets(train_df, test_df, covariates, treatment, outcome, train_qids, test_qids):
@@ -136,7 +139,7 @@ def decompose_module_errors(module_csvs, num_modules):
 
 def process_shared_covariates_row_wise(train_df, test_df, args):
     num_modules = [col for col in train_df.columns if col.startswith('num_module_')]
-    if args.covariates_shared:
+    if args.covariates_shared and args.composition_type == "parallel":
         def process_row(row):
             # Find non-zero modules for this row
             num_modules = [col for col in row.index if col.startswith('num_module_')]
@@ -174,3 +177,30 @@ def process_shared_covariates_row_wise(train_df, test_df, args):
     else:
         # If covariates are not shared, return the original dataframes
         return train_df, test_df
+
+def combine_model_effects(gt_effects, model_effects, additive_combined_df):
+    """
+    Combine ground truth effects with estimated effects from all models into a single DataFrame.
+    
+    :param gt_effects: Dictionary of ground truth effects
+    :param model_effects: Dictionary of estimated effects for each model
+    :param additive_combined_df: DataFrame with additive model results
+    :return: Combined DataFrame with effects from all models
+    """
+    # Start with ground truth effects
+    combined_df = pd.DataFrame({
+        'query_id': gt_effects.keys(),
+        'ground_truth_effect': gt_effects.values()
+    })
+    
+    # Add effects from each model
+    for model_name, effects in model_effects.items():
+        combined_df[f'{model_name}_effect'] = [effects[qid] for qid in combined_df['query_id']]
+    
+    # Add effects from the additive model
+    additive_effects = additive_combined_df.set_index('query_id')['estimated_effect']
+    additive_gt_effects = additive_combined_df.set_index('query_id')['ground_truth_effect']
+    combined_df['Additive_effect'] = combined_df['query_id'].map(additive_effects)
+    combined_df['Additive_gt_effect'] = combined_df['query_id'].map(additive_gt_effects)
+    
+    return combined_df
