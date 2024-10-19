@@ -278,29 +278,37 @@ def pehe(ground_truth, estimated):
 def get_r2_score(ground_truth, estimated):
     return r2_score(ground_truth, estimated)
 
-def scale_df(df_apo, df_sampled, scaler_path, csv_path):
-    module_files = os.listdir(f"{csv_path}/")
-    module_files = [x for x in module_files if "module" in x]
-    module_output_columns = []
-    for module_file in module_files:
-        module_id = module_file.split(".")[0].split("_")[-1]
-        module_input_scaler = pickle.load(open(f"{scaler_path}/input_scaler_{module_id}.pkl", "rb"))
-        module_output_scaler = pickle.load(open(f"{scaler_path}/output_scaler_{module_id}.pkl", "rb"))
-        module_features = [x for x in df_apo.columns if f"module_{module_id}_feature" in x]
-        
-        module_output = f"module_{module_id}_output"
-        # print(df_apo[["query_id", "treatment_id", f"module_{module_id}_output"]].head())
-        df_apo[[module_output]] = module_output_scaler.transform(df_apo[[module_output]].values.reshape(-1, 1))
-        # print(df_apo[["query_id", "treatment_id", f"module_{module_id}_output"]].head())
-        df_apo[module_features] = module_input_scaler.transform(df_apo[module_features].values)
-        df_sampled[[module_output]] = module_output_scaler.transform(df_sampled[[module_output]].values.reshape(-1, 1))
-        df_sampled[module_features] = module_input_scaler.transform(df_sampled[module_features].values)
-        module_output_columns.append(module_output)
+def scale_df(df_apo, df_sampled, scaler_path, csv_path, composition_type, covariates):
 
-    # re-assign the query_output by adding the output of all modules
-    
-    df_apo["query_output"] = df_apo[module_output_columns].sum(axis=1)
-    df_sampled["query_output"] = df_sampled[module_output_columns].sum(axis=1)
+    if composition_type == "parallel":
+        module_files = os.listdir(f"{csv_path}/")
+        module_files = [x for x in module_files if "module" in x]
+        module_output_columns = []
+        for module_file in module_files:
+            module_id = module_file.split(".")[0].split("_")[-1]
+            module_input_scaler = pickle.load(open(f"{scaler_path}/input_scaler_{module_id}.pkl", "rb"))
+            module_output_scaler = pickle.load(open(f"{scaler_path}/output_scaler_{module_id}.pkl", "rb"))
+            module_features = [x for x in df_apo.columns if f"module_{module_id}_feature" in x]
+            
+            module_output = f"module_{module_id}_output"
+            # print(df_apo[["query_id", "treatment_id", f"module_{module_id}_output"]].head())
+            df_apo[[module_output]] = module_output_scaler.transform(df_apo[[module_output]].values.reshape(-1, 1))
+            # print(df_apo[["query_id", "treatment_id", f"module_{module_id}_output"]].head())
+            df_apo[module_features] = module_input_scaler.transform(df_apo[module_features].values)
+            df_sampled[[module_output]] = module_output_scaler.transform(df_sampled[[module_output]].values.reshape(-1, 1))
+            df_sampled[module_features] = module_input_scaler.transform(df_sampled[module_features].values)
+            module_output_columns.append(module_output)
+
+        # re-assign the query_output by adding the output of all modules
+        
+        df_apo["query_output"] = df_apo[module_output_columns].sum(axis=1)
+        df_sampled["query_output"] = df_sampled[module_output_columns].sum(axis=1)
+
+    else:
+        # just scale the covariates
+        df_apo[covariates] = df_apo[covariates].apply(lambda x: (x - x.mean()) / x.std())
+        df_sampled[covariates] = df_sampled[covariates].apply(lambda x: (x - x.mean()) / x.std())
+
 
     return df_apo, df_sampled
             

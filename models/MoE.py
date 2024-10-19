@@ -96,7 +96,7 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     T = train_df[treatment].values
     Y = train_df[outcome].values
     X_T = np.concatenate([X, T.reshape(-1, 1)], axis=1)
-    print(X_T.shape)
+    # print(X_T.shape)
     
     loss_fn = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -133,6 +133,7 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
         
         avg_train_loss = epoch_loss / (X_T.shape[0] // batch_size)
         train_losses.append(avg_train_loss)
+        # print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}")
         
         # Validation step
         if val_df is not None:
@@ -160,7 +161,7 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     
     return model, train_losses, val_losses
 # Prediction function for both models
-def predict_model(model, test_df, covariates):
+def predict_model(model, test_df, covariates, return_effect=True, return_po=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     X = test_df[covariates].values
@@ -171,8 +172,11 @@ def predict_model(model, test_df, covariates):
     X_0 = torch.tensor(X_0, dtype=torch.float32).to(device)
 
     with torch.no_grad():
-        predicted_effect_1 = model(X_1).cpu().numpy()
-        predicted_effect_0 = model(X_0).cpu().numpy()
-        predicted_effect = predicted_effect_1 - predicted_effect_0
-    
-    return predicted_effect
+        predicted_outcome_1 = model(X_1).cpu().numpy()
+        predicted_outcome_0 = model(X_0).cpu().numpy()
+        predicted_effect = predicted_outcome_1 - predicted_outcome_0
+
+    if return_effect:
+        return predicted_effect
+    else:
+        return predicted_outcome_1, predicted_outcome_0

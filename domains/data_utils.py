@@ -333,7 +333,11 @@ def generate_input_trees(num_modules, feature_dim=3, seed=42, num_trees=1000, ma
 #     total_trees = sum(len(trees) for trees in grouped_trees.values())
 #     return total_trees
     
-def simulate_outcome(input_tree, treatment_id, module_functions, module_params_dict, max_depth=float('inf'), feature_dim=3, composition_type="hierarchical", use_subset_features=False):
+def simulate_outcome(input_tree, treatment_id, module_functions, module_params_dict, max_depth=float('inf'), feature_dim=3, composition_type="hierarchical", use_subset_features=False, noise=0.0):
+    # simulate additive module noise with a normal distribution but different standard deviation for each module
+    if noise > 0:
+        module_noise_scales = {module_id: np.random.uniform(0.5, 1) for module_id in module_functions.keys()}
+    
     def propagate(node, depth=1):
         if depth > max_depth:
             return 0.0
@@ -345,6 +349,7 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
         else:
             # get total number of modules 
             num_modules = len(module_functions)
+           
             # divide the features into equal parts for each module
             num_features_per_module = feature_dim // num_modules
             # get the index of the first feature for the current module
@@ -371,7 +376,7 @@ def simulate_outcome(input_tree, treatment_id, module_functions, module_params_d
 
         module_params = module_params_dict.get(module_id, {})
         
-        output = module_function(*inputs, **module_params)
+        output = module_function(*inputs, **module_params) + np.random.normal(0, noise * module_noise_scales[module_id] if noise > 0 else 0)
         node['output'] = output
         # total_output is the output of the module including the output of its children if composition_type is parallel
         if node['children'] is not None and composition_type == "parallel":
@@ -726,20 +731,50 @@ def observational_sampling(df_apo, biasing_covariate, bias_strength, plot_folder
     df_apo.sort_values(by=["query_id", "treatment_id"], inplace=True)
     
     treatment_ids = list(df_apo["treatment_id"].unique())
+    
+    # Backward compatibility for 'feature_sum'
     if biasing_covariate == "feature_sum":
         feature_names = [col for col in df_apo.columns if "feature" in col]
+        
+        # Create feature_sum as the sum of all feature columns
         df_apo["feature_sum"] = df_apo[feature_names].sum(axis=1)
         cov = df_apo["feature_sum"].values
-        # drop feature_sum from df_apo
+        # Drop the feature_sum after use
         _ = df_apo.drop(columns=["feature_sum"], inplace=True)
+    
+    # Handle the new 'multivariate_features' covariate
+    elif biasing_covariate == "multivariate_features":
+        feature_names = [col for col in df_apo.columns if "feature" in col]
+        
+        # Ensure that 'tree_depth' is present in the DataFrame
+        if "tree_depth" not in df_apo.columns:
+            raise ValueError("tree_depth column is missing from the DataFrame")
+        
+        # Create a multivariate interaction feature that depends on the tree_depth for each row
+        df_apo["multivariate_interaction"] = df_apo.apply(
+            lambda row: np.dot(row[feature_names], np.linspace(1, row["tree_depth"], len(feature_names))), axis=1
+        )
+        
+        cov = df_apo["multivariate_interaction"].values
+        # Drop the interaction feature after use
+        _ = df_apo.drop(columns=["multivariate_interaction"], inplace=True)
     else:
+        # For other covariates, use the specified column directly
         cov = df_apo[biasing_covariate].values
     
-    cov = cov[::2]
+    # Apply overlap issues based on the covariate
+    cov = cov[::2]  # Sample every second entry
     ecdf = ECDF(cov)
     cov_ecdf = ecdf(cov)
     cov_ecdf = cov_ecdf - np.mean(cov_ecdf)
-    coefficients = np.repeat(bias_strength, len(cov))
+    
+    # Use the tree_depth per row to adjust bias strength if tree_depth exists, else default to 1
+    if "tree_depth" in df_apo.columns:
+        tree_depths = df_apo["tree_depth"].values[::2]  # Get the corresponding tree depths for cov
+    else:
+        tree_depths = np.ones(len(cov))  # If tree_depth doesn't exist, default to 1
+    
+    coefficients = bias_strength * tree_depths  # Scale bias by tree depth
     prob_values = 1 / (1 + np.exp(-coefficients * cov_ecdf))
     prob_values = np.clip(prob_values, 0.001, 0.999)
     
@@ -748,6 +783,7 @@ def observational_sampling(df_apo, biasing_covariate, bias_strength, plot_folder
     assigned_treatment_ids = np.repeat(assigned_treatment_ids, 2)
     df_apo["assigned_treatment_id"] = assigned_treatment_ids
 
+    # Optionally plot the relationship between covariates and probabilities if a plot_folder is provided
     # if plot_folder is not None:
     #     plt.figure(figsize=(10, 10))
     #     plt.scatter(cov, prob_values)
@@ -759,17 +795,20 @@ def observational_sampling(df_apo, biasing_covariate, bias_strength, plot_folder
 
     df_sampled = df_apo[df_apo["treatment_id"] == df_apo["assigned_treatment_id"]]
     df_cf_sampled = df_apo[~df_apo.index.isin(df_sampled.index)]
-    # drop treatment_id from df_sampled and df_cf_sampled
+    
+    # Drop the original treatment_id columns
     df_sampled.drop(columns=["treatment_id"], inplace=True)
     df_cf_sampled.drop(columns=["treatment_id"], inplace=True)
-    # rename assigned_treatment_id to treatment_id
+    
+    # Rename the assigned treatment id to treatment_id for consistency
     df_sampled.rename(columns={"assigned_treatment_id": "treatment_id"}, inplace=True)
     df_cf_sampled.rename(columns={"assigned_treatment_id": "treatment_id"}, inplace=True)
 
-    # drop assigned_treatment_id from df
+    # Clean up the temporary column
     df_apo.drop(columns=["assigned_treatment_id"], inplace=True)
-    # also return a dictionary of the treatment assignments
-    # make dict with query_id as key and treatment_id as value
+    
+    # Create a dictionary of treatment assignments by query_id
     treatment_assignments = df_sampled[["query_id", "treatment_id"]].set_index("query_id").to_dict()["treatment_id"]
+    
     return df_sampled, df_cf_sampled, treatment_assignments
 
