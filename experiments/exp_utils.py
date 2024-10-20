@@ -9,6 +9,7 @@ from domains.synthetic_data_sampler import SyntheticDataSampler
 from models.MoE import *
 from models.utils import *
 
+
 warnings.filterwarnings('ignore')
 
 def parse_arguments(jupyter=False):
@@ -16,8 +17,8 @@ def parse_arguments(jupyter=False):
     parser.add_argument("--domain", type=str, default="synthetic_data", help="Domain")
     parser.add_argument("--biasing_covariate", type=str, default="feature_sum", help="Biasing covariate")
     parser.add_argument("--bias_strength", type=float, default=0, help="Bias strength")
-    parser.add_argument("--scale", type=bool, default=False, help="Scale data")
-    parser.add_argument("--num_modules", type=int, default=6, help="Number of modules")
+    parser.add_argument("--scale", type=bool, default=True, help="Scale data")
+    parser.add_argument("--num_modules", type=int, default=5, help="Number of modules")
     parser.add_argument("--num_feature_dimensions", type=int, default=5, help="Number of feature dimensions")
     parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
     parser.add_argument("--composition_type", type=str, default="hierarchical", help="Composition type")

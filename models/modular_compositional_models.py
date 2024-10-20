@@ -252,8 +252,6 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
     # make it a column
     additive_combined_test_df.reset_index(inplace=True)
 
-    print(additive_combined_train_df.head())
-    print(additive_combined_test_df.head())
 
     return additive_combined_train_df, additive_combined_test_df, modules_csvs_train, modules_csvs_test, modules_train_sizes
 
@@ -304,14 +302,23 @@ def split_modular_data(csv_path, obs_data_path, train_qids, test_qids, scaler_pa
     return train_data, test_data, module_files
 
 
-def train_modular_model_with_po(train_data, module_files, domain, model_misspecification, underlying_model_class, hidden_dim, epochs, batch_size, output_dim):
+def train_modular_model_with_po(train_data, module_files, domain, model_misspecification, underlying_model_class, hidden_dim, epochs, batch_size, output_dim, hl_train_df, hl_covariates, use_high_level_features):
     # Train models with access to fine-grained potential outcomes
     trained_models = {}
     for module_file in module_files:
         train_df = train_data[module_file]
         if domain == "synthetic_data":
-            # if sequential composition, use child_output (parent) as a feature
-            covariates = [x for x in train_df.columns if "feature" in x or x == "child_output"]
+            if use_high_level_features:
+                # use hl_covariates from  hl_train_df for same query_id
+                covariates = hl_covariates + [x for x in train_df.columns if "child_output" in x]
+                train_df = train_df.merge(hl_train_df, on="query_id", how="left")
+                # rename treatment_id_x to treatment_id
+                train_df.rename(columns={"treatment_id_x": "treatment_id"}, inplace=True)
+                
+                
+            else:
+                # if sequential composition, use child_output (parent) as a feature
+                covariates = [x for x in train_df.columns if "feature" in x or x == "child_output"]
 
             # try removing feature_0 to induce model misspecification # other way is to use the linear model
             if model_misspecification:
@@ -323,6 +330,7 @@ def train_modular_model_with_po(train_data, module_files, domain, model_misspeci
         outcome = "output"
         print(module_file, covariates)
         input_dim = len(covariates)
+        print(input_dim, hidden_dim)
         if input_dim > hidden_dim:
             hidden_dim = (input_dim + 1) * 2
 
@@ -340,7 +348,7 @@ def train_modular_model_with_po(train_data, module_files, domain, model_misspeci
 
 
 
-def predict(node, query_id, treatment_id, trained_models, test_data_dict):
+def predict(node, query_id, treatment_id, trained_models, test_data_dict, hl_test_df, hl_covariates, use_high_level_features):
     module_id = node["module_id"]
     module_file = f"module_{module_id}.csv"
     model = trained_models[module_file]
@@ -349,23 +357,29 @@ def predict(node, query_id, treatment_id, trained_models, test_data_dict):
 
     if node["children"] is not None and len(node["children"]) > 0:
         child = node["children"][0]
-        child_output = predict(child, query_id, treatment_id, trained_models, test_data_dict)
+        child_output = predict(child, query_id, treatment_id, trained_models, test_data_dict, hl_test_df, hl_covariates, use_high_level_features)
         module_row = module_row.assign(child_output=child_output)
-
-    covariates = [x for x in df.columns if "feature" in x or x == "child_output"]
+    
+    if use_high_level_features:
+        covariates = hl_covariates + [x for x in df.columns if x == "child_output"]
+        module_row = module_row.merge(hl_test_df, on="query_id", how="left")
+        # rename treatment_id_x to treatment_id
+        module_row.rename(columns={"treatment_id_x": "treatment_id"}, inplace=True)
+    else:
+        covariates = [x for x in df.columns if "feature" in x or x == "child_output"]
     
     p1, p0 = predict_model(model, module_row, covariates, return_po=True, return_effect=False)
 
     return p1 if treatment_id == 1 else p0
 
 def predict_single_query(args):
-    query_id, json_dict, trained_models, test_data_dict = args
+    query_id, json_dict, trained_models, test_data_dict, hl_test_df, hl_covariates, use_high_level_features = args
     tree_node = json_dict["json_tree"]
-    p1 = predict(tree_node, query_id, 1, trained_models, test_data_dict)
-    p0 = predict(tree_node, query_id, 0, trained_models, test_data_dict)
+    p1 = predict(tree_node, query_id, 1, trained_models, test_data_dict, hl_test_df, hl_covariates, use_high_level_features)
+    p0 = predict(tree_node, query_id, 0, trained_models, test_data_dict, hl_test_df, hl_covariates, use_high_level_features)
     return query_id, p1 - p0
 
-def predict_modular_model_with_po(test_data, trained_models, jsons):
+def predict_modular_model_with_po(test_data, trained_models, jsons,  hl_test_df=None, hl_covariates=None, use_high_level_features=False):
     predictions = {}
 
     # Convert test_data to a dictionary for faster access
@@ -375,7 +389,7 @@ def predict_modular_model_with_po(test_data, trained_models, jsons):
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = []
         for query_id, json_dict in jsons.items():
-            futures.append(executor.submit(predict_single_query, (query_id, json_dict, trained_models, test_data_dict)))
+            futures.append(executor.submit(predict_single_query, (query_id, json_dict, trained_models, test_data_dict,  hl_test_df, hl_covariates, use_high_level_features)))
 
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing queries"):
             query_id, prediction = future.result()
@@ -402,22 +416,22 @@ def prepare_results(qids, predictions, ground_truth_data):
     return pd.DataFrame(results)
 
 
-def get_sequential_model_effects(csv_path, obs_data_path, train_qids, test_qids, jsons_0, jsons_1, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale=True, scaler_path=None, bias_strength=0, domain="synthetic_data", model_misspecification=False, composition_type="parallel", evaluate_train=False):
+def get_sequential_model_effects(csv_path, obs_data_path, train_qids, test_qids, jsons_0, jsons_1, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale=True, scaler_path=None, bias_strength=0, domain="synthetic_data", model_misspecification=False, composition_type="parallel", evaluate_train=False, train_df=None, test_df=None, covariates=None, use_high_level_features=False):
 
     # split the data into train and test
     train_data, test_data, module_files = split_modular_data(csv_path, obs_data_path, train_qids, test_qids, scaler_path, scale, bias_strength, composition_type)
     # Train models with access to fine-grained potential outcomes
-    trained_models = train_modular_model_with_po(train_data, module_files, domain, model_misspecification, underlying_model_class, hidden_dim, epochs, batch_size, output_dim)
+    trained_models = train_modular_model_with_po(train_data, module_files, domain, model_misspecification, underlying_model_class, hidden_dim, epochs, batch_size, output_dim, train_df,  covariates, use_high_level_features)
 
     # Compute predictions
     train_jsons = {k:v for k,v in jsons_0.items() if k in train_qids}
     test_jsons = {k:v for k,v in jsons_0.items() if k in test_qids}
     if evaluate_train:
-        train_predictions = predict_modular_model_with_po(train_data, trained_models, train_jsons)
+        train_predictions = predict_modular_model_with_po(train_data, trained_models, train_jsons, train_df, covariates, use_high_level_features)
         # Get ground truth effects        
         train_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, train_qids)
         train_results = prepare_results(train_qids, train_predictions, train_ground_truth)
-    test_predictions = predict_modular_model_with_po(test_data, trained_models, test_jsons)
+    test_predictions = predict_modular_model_with_po(test_data, trained_models, test_jsons, test_df, covariates, use_high_level_features)
     test_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, test_qids)
     test_results = prepare_results(test_qids, test_predictions, test_ground_truth)
     if evaluate_train:

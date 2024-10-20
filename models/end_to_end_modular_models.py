@@ -7,7 +7,6 @@ from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 from models.modular_compositional_models import split_modular_data
 import numpy as np
-import pandas as pd
 
 # this creates a separate model for each module 
 class ModuleNet(nn.Module):
@@ -67,23 +66,30 @@ class ModularModel(nn.Module):
 
         return forward_recursive(json_structure)
 
-def create_modular_model(train_data, jsons_0, jsons_1, scale=False):
+def create_modular_model(train_data, jsons_0, jsons_1, scale=False, use_high_level_features=False, train_df=None, covariates=None):
+    
     module_configs = {}
     scalers = {}
+    output_scaler = StandardScaler()
     
     def process_node(node):
         module_id = str(node['module_id'])
         if module_id not in module_configs:
-            module_file = f"module_{module_id}.csv"
-            df = train_data[module_file]
-            covariates = [x for x in df.columns if "feature" in x]
-            input_dim = len(covariates) + 1  # +1 for treatment
+            if use_high_level_features:
+                input_dim = len(covariates) + 1  # +1 for treatment
+            else:
+                module_file = f"module_{module_id}.csv"
+                df = train_data[module_file]
+                module_covariates = [x for x in df.columns if "feature" in x]
+                input_dim = len(module_covariates) + 1  # +1 for treatment
             
             # Create and fit scaler
             scaler = StandardScaler()
-            # don't scale treatment_id
             if scale:
-                scaler.fit(df[covariates])
+                if use_high_level_features:
+                    scaler.fit(train_df[covariates])
+                else:
+                    scaler.fit(df[module_covariates])
             scalers[module_id] = scaler
             
             hidden_dim = max(32, (input_dim + 1) * 2)
@@ -103,24 +109,35 @@ def create_modular_model(train_data, jsons_0, jsons_1, scale=False):
     for json_structure in jsons_1.values():
         process_node(json_structure['json_tree'])
     
-    return ModularModel(module_configs), scalers
+    # Fit output scaler on all output values
+    if scale:
+        all_outputs = []
+        for module_file in train_data.values():
+            all_outputs.extend(module_file['output'].values)
+        output_scaler.fit(np.array(all_outputs).reshape(-1, 1))
+    
+    return ModularModel(module_configs), scalers, output_scaler
 
 
-def prepare_data_for_training(train_data, jsons_0, jsons_1, train_qids, scalers, scale=False):
+def prepare_data_for_training(train_data, jsons_0, jsons_1, train_qids, scalers, output_scaler, scale=False, use_high_level_features=False, train_df=None, covariates=None):
     X = {qid: {} for qid in train_qids}
     y = []
     json_structures = []
     
     def get_features_recursive(node, query_id):
         module_id = str(node['module_id'])
-        module_file = f"module_{module_id}.csv"
-        df = train_data[module_file]
-        row = df[df['query_id'] == query_id].iloc[0]
-        covariates = [x for x in df.columns if "feature" in x]
-        features = row[covariates].values.reshape(1, -1)
+        if use_high_level_features:
+            row = train_df[train_df['query_id'] == query_id].iloc[0]
+            features = row[covariates].values.reshape(1, -1)
+        else:
+            module_file = f"module_{module_id}.csv"
+            df = train_data[module_file]
+            row = df[df['query_id'] == query_id].iloc[0]
+            module_covariates = [x for x in df.columns if "feature" in x]
+            features = row[module_covariates].values.reshape(1, -1)
+        
         if scale:
             features_scaled = scalers[module_id].transform(features).flatten()
-            
         else:
             features_scaled = features.flatten()
         # Add treatment as a feature
@@ -137,7 +154,10 @@ def prepare_data_for_training(train_data, jsons_0, jsons_1, train_qids, scalers,
         json_structures.append(json_data['json_tree'])
         root_module_id = str(json_data['json_tree']['module_id'])
         root_module_file = f"module_{root_module_id}.csv"
-        y.append(train_data[root_module_file][train_data[root_module_file]['query_id'] == query_id]['output'].iloc[0])
+        output = train_data[root_module_file][train_data[root_module_file]['query_id'] == query_id]['output'].iloc[0]
+        if scale:
+            output = output_scaler.transform([[output]])[0][0]
+        y.append(output)
 
     return X, torch.tensor(y, dtype=torch.float32).unsqueeze(1), json_structures
 
@@ -197,18 +217,22 @@ def train_end_to_end_modular_model(model, X, y, json_structures, epochs, batch_s
 
     return model
 
-# Update predict_end_to_end_modular_model to use scalers
-def predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers, scale=False):
+def predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers, output_scaler, scale=False, use_high_level_features=False, test_df=None, covariates=None):
     model.eval()
     predictions = {}
     
     def get_features_recursive(node, query_id, treatment):
         module_id = str(node['module_id'])
-        module_file = f"module_{module_id}.csv"
-        df = test_data[module_file]
-        row = df[df['query_id'] == query_id].iloc[0]
-        covariates = [x for x in df.columns if "feature" in x]
-        features = row[covariates].values.reshape(1, -1)
+        if use_high_level_features:
+            row = test_df[test_df['query_id'] == query_id].iloc[0]
+            features = row[covariates].values.reshape(1, -1)
+        else:
+            module_file = f"module_{module_id}.csv"
+            df = test_data[module_file]
+            row = df[df['query_id'] == query_id].iloc[0]
+            module_covariates = [x for x in df.columns if "feature" in x]
+            features = row[module_covariates].values.reshape(1, -1)
+        
         if scale:
             features_scaled = scalers[module_id].transform(features).flatten()
         else:
@@ -218,10 +242,13 @@ def predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers
         return features_scaled
 
     query_ids = []
-    for module_id, data in test_data.items():
-        query_ids.extend(data['query_id'].values)
-    query_ids = list(set(query_ids)) 
-    # predict only on the test data
+    if use_high_level_features:
+        query_ids = test_df['query_id'].unique()
+    else:
+        for module_id, data in test_data.items():
+            query_ids.extend(data['query_id'].values)
+        query_ids = list(set(query_ids))
+    
     for query_id in query_ids:
         X_0 = {str(node['module_id']): torch.tensor([get_features_recursive(node, query_id, 0)], dtype=torch.float32) 
                 for node in traverse_json_tree(jsons_0[query_id]['json_tree'])}
@@ -230,7 +257,14 @@ def predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers
         y_0 = model(X_0, jsons_0[query_id]['json_tree'])
         y_1 = model(X_1, jsons_1[query_id]['json_tree'])
         
-        predictions[query_id] =(y_1 - y_0).item()
+        if scale:
+            y_0 = output_scaler.inverse_transform(y_0.detach().numpy())[0][0]
+            y_1 = output_scaler.inverse_transform(y_1.detach().numpy())[0][0]
+        else:
+            y_0 = y_0.item()
+            y_1 = y_1.item()
+        
+        predictions[query_id] = y_1 - y_0
     return predictions
 
 
@@ -259,30 +293,36 @@ def prepare_results(qids, predictions, ground_truth_data):
         })
     return pd.DataFrame(results)
 
-def get_end_to_end_modular_model_effects(csv_path, obs_data_path, train_qids, test_qids, jsons_0, jsons_1, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale=True, scaler_path=None, bias_strength=0, domain="synthetic_data", model_misspecification=False, composition_type="hierarchical", evaluate_train=False):
+def get_end_to_end_modular_model_effects(csv_path, obs_data_path, train_qids, test_qids, jsons_0, jsons_1, hidden_dim=32, epochs=100, batch_size=64, output_dim=1, underlying_model_class="MLP", scale=True, scaler_path=None, bias_strength=0, domain="synthetic_data", model_misspecification=False, composition_type="hierarchical", evaluate_train=False, train_df=None, test_df=None, covariates=None, use_high_level_features=False):
     
+    if use_high_level_features:
+        assert train_df is not None and test_df is not None and covariates is not None, "train_df, test_df, and covariates must be provided when use_high_level_features is True"
+       
     train_data, test_data, module_files = split_modular_data(csv_path, obs_data_path, train_qids, test_qids, scaler_path, scale, bias_strength, composition_type)
-    # Create the model and get scalers
-    model, scalers = create_modular_model(train_data, jsons_0, jsons_1, scale)
     
-    # Prepare data for training (now includes scaling)
-    X, y, json_structures = prepare_data_for_training(train_data, jsons_0, jsons_1, train_qids, scalers, scale)
+    # Create the model and get scalers
+    model, scalers, output_scaler = create_modular_model(train_data, jsons_0, jsons_1, scale, use_high_level_features, train_df, covariates)
+    
+    # Prepare data for training
+    X, y, json_structures = prepare_data_for_training(train_data, jsons_0, jsons_1, train_qids, scalers, output_scaler, scale, use_high_level_features, train_df, covariates)
     
     # Train the model
     train_end_to_end_modular_model(model, X, y, json_structures, epochs, batch_size)
     
-    # Make predictions (update this function to use scalers)
+    # Make predictions
     if evaluate_train:
-        train_predictions = predict_end_to_end_modular_model(model, train_data, jsons_0, jsons_1, scalers, scale)
+        train_predictions = predict_end_to_end_modular_model(model, train_data, jsons_0, jsons_1, scalers, output_scaler, scale, use_high_level_features, train_df, covariates)
         train_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, train_qids)
         train_results = prepare_results(train_qids, train_predictions, train_ground_truth)
-    test_predictions = predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers, scale)
+    
+    test_predictions = predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers, output_scaler, scale, use_high_level_features, test_df, covariates)
     
     # Get ground truth effects
     test_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, test_qids)
     
     # Prepare and return results
     test_results = prepare_results(test_qids, test_predictions, test_ground_truth)
+    
     if evaluate_train:
         return train_results, test_results
     else:
