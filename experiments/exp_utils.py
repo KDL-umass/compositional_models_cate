@@ -17,9 +17,9 @@ def parse_arguments(jupyter=False):
     parser.add_argument("--domain", type=str, default="synthetic_data", help="Domain")
     parser.add_argument("--biasing_covariate", type=str, default="feature_sum", help="Biasing covariate")
     parser.add_argument("--bias_strength", type=float, default=0, help="Bias strength")
-    parser.add_argument("--scale", type=bool, default=True, help="Scale data")
-    parser.add_argument("--num_modules", type=int, default=5, help="Number of modules")
-    parser.add_argument("--num_feature_dimensions", type=int, default=5, help="Number of feature dimensions")
+    parser.add_argument("--scale", type=bool, default=False, help="Scale data")
+    parser.add_argument("--num_modules", type=int, default=10, help="Number of modules")
+    parser.add_argument("--num_feature_dimensions", type=int, default=1, help="Number of feature dimensions")
     parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
     parser.add_argument("--composition_type", type=str, default="hierarchical", help="Composition type")
     parser.add_argument("--resample", type=bool, default=True, help="Resample data")
@@ -85,11 +85,11 @@ def load_train_test_data(csv_path, args, df_sampled):
     test_df = df_sampled[df_sampled["query_id"].isin(test_qids)]
     return train_df, test_df, train_qids, test_qids
 
-def train_and_evaluate_model(model, train_df, test_df, covariates, treatment, outcome, epochs, batch_size, train_qids, test_qids,plot=False):
-    model, _, _ = train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, plot=plot)
+def train_and_evaluate_model(model, train_df, test_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, train_qids, test_qids,plot=False, model_name="MoE"):
+    model, _, _ = train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, plot=plot, model_name=model_name)
     
-    train_estimates = predict_model(model, train_df, covariates, return_effect=True)
-    test_estimates = predict_model(model, test_df, covariates, return_effect=True)
+    train_estimates = predict_model(model, train_df, covariates, num_modules, num_feature_dimensions, return_effect=True, model_name=model_name)
+    test_estimates = predict_model(model, test_df, covariates, num_modules, num_feature_dimensions, return_effect=True, model_name=model_name)
     train_df.loc[:, "estimated_effect"] = train_estimates
     test_df.loc[:, "estimated_effect"] = test_estimates
     

@@ -1,9 +1,8 @@
 #!/bin/bash
-#SBATCH  -t 48:00:00
+#SBATCH  -t 16:00:00
 #SBATCH -p gpu-preempt
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --mem 100GB
-#SBATCH --constraint vram80
 #SBATCH --cpus-per-task 4
 #SBATCH --job-name=test-hypothesis-1
 #SBATCH --output=./out/test-hypothesis_%j.out
@@ -13,7 +12,7 @@ cd /work/pi_jensen_umass_edu/ppruthi_umass_edu/compositional_models_cate/experim
 
 # Path to your Python script
 # PYTHON_SCRIPT="test_base_hypotheses_modularized.py"
-PYTHON_SCRIPT="sequential_compositional_generalization.py"
+PYTHON_SCRIPT="parallel_compositional_generalization.py"
 cmd="python $PYTHON_SCRIPT"
 echo "Running: $cmd"
 eval $cmd
