@@ -28,7 +28,7 @@ class SyntheticDataSampler:
         composition_type,
         fixed_structure,
         max_depth=float('inf'), 
-        num_trees=1000,
+        num_trees=2000,
         seed=42,
         data_dist="uniform",
         module_function_types = None,
@@ -39,7 +39,7 @@ class SyntheticDataSampler:
         use_subset_features = False,
         run_env = "local",
         systematic = False,
-        trees_per_group = 2000,
+        trees_per_group = 4000,
         test_size = 0.2,
         noise = 0.0
     ):
@@ -430,9 +430,10 @@ class SyntheticDataSampler:
         # all depths 
         depths = grouped["tree_depth"].unique()
         if split_type == "ood":
-            split_idx = int(num_train_modules)
+            split_idx = int(num_train_modules-1)
             print("split_idx: ", split_idx)
-            train_depths, test_depths = depths[:split_idx], depths[split_idx:]
+            
+            train_depths, test_depths = [depths[split_idx-1]], depths[split_idx:]
             if test_on_last_depth:
                 test_depths = [depths[-1]]
 
@@ -458,13 +459,15 @@ class SyntheticDataSampler:
                 if row["tree_depth"] in train_depths:
                     train_ids = query_ids
                     split_dict["train"].extend(train_ids)
-                else:
+                if row["tree_depth"] in test_depths:
                     test_ids = query_ids
                     split_dict["test"].extend(test_ids)
-        print(len(split_dict["train"]), len(split_dict["test"]))
+        
         # sort the query ids
         split_dict["train"] = sorted(split_dict["train"])
         split_dict["test"] = sorted(split_dict["test"])
+        print("train: ", len(split_dict["train"]))
+        print("test: ", len(split_dict["test"]))
         # save it in main folder
         split_folder = "{}/{}".format(self.csv_folder, split_type)
         if not os.path.exists(split_folder):

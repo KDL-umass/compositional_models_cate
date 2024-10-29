@@ -257,12 +257,12 @@ def predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers
         y_0 = model(X_0, jsons_0[query_id]['json_tree'])
         y_1 = model(X_1, jsons_1[query_id]['json_tree'])
         
-        if scale:
-            y_0 = output_scaler.inverse_transform(y_0.detach().numpy())[0][0]
-            y_1 = output_scaler.inverse_transform(y_1.detach().numpy())[0][0]
-        else:
-            y_0 = y_0.item()
-            y_1 = y_1.item()
+        # if scale:
+        #     y_0 = output_scaler.inverse_transform(y_0.detach().numpy())[0][0]
+        #     y_1 = output_scaler.inverse_transform(y_1.detach().numpy())[0][0]
+        # else:
+        y_0 = y_0.item()
+        y_1 = y_1.item()
         
         predictions[query_id] = y_1 - y_0
     return predictions
@@ -274,11 +274,21 @@ def traverse_json_tree(node):
         for child in node['children']:
             yield from traverse_json_tree(child)
 
-def get_ground_truth_effects_jsons(jsons_0, jsons_1, qids):
+def get_ground_truth_effects_jsons(jsons_0, jsons_1, qids, output_scaler=None, scale=False):
     jsons_0 = {k:v for k,v in jsons_0.items() if k in qids}
     jsons_1 = {k:v for k,v in jsons_1.items() if k in qids}
     ground_truth_0 = {k:v["query_output"] for k,v in jsons_0.items()}
     ground_truth_1 = {k:v["query_output"] for k,v in jsons_1.items()}
+    if scale:
+        # get the last module id in each json and use the corresponding scaler 
+        for k,v in jsons_0.items():
+            output = v["query_output"]
+            ground_truth_0[k] = output_scaler.transform(output.reshape(-1, 1)).squeeze()
+
+        for k,v in jsons_1.items():
+            output = v["query_output"]
+            ground_truth_1[k] = output_scaler.transform(output.reshape(-1, 1)).squeeze()
+ 
     return {k: ground_truth_1[k] - ground_truth_0[k] for k in qids}
     
 
@@ -298,7 +308,7 @@ def get_end_to_end_modular_model_effects(csv_path, obs_data_path, train_qids, te
     if use_high_level_features:
         assert train_df is not None and test_df is not None and covariates is not None, "train_df, test_df, and covariates must be provided when use_high_level_features is True"
        
-    train_data, test_data, module_files = split_modular_data(csv_path, obs_data_path, train_qids, test_qids, scaler_path, scale, bias_strength, composition_type)
+    train_data, test_data, module_files = split_modular_data(csv_path, obs_data_path, train_qids, test_qids, scaler_path, False, bias_strength, composition_type)
     
     # Create the model and get scalers
     model, scalers, output_scaler = create_modular_model(train_data, jsons_0, jsons_1, scale, use_high_level_features, train_df, covariates)
@@ -312,13 +322,13 @@ def get_end_to_end_modular_model_effects(csv_path, obs_data_path, train_qids, te
     # Make predictions
     if evaluate_train:
         train_predictions = predict_end_to_end_modular_model(model, train_data, jsons_0, jsons_1, scalers, output_scaler, scale, use_high_level_features, train_df, covariates)
-        train_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, train_qids)
+        train_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, train_qids, output_scaler, scale)
         train_results = prepare_results(train_qids, train_predictions, train_ground_truth)
     
     test_predictions = predict_end_to_end_modular_model(model, test_data, jsons_0, jsons_1, scalers, output_scaler, scale, use_high_level_features, test_df, covariates)
     
     # Get ground truth effects
-    test_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, test_qids)
+    test_ground_truth = get_ground_truth_effects_jsons(jsons_0, jsons_1, test_qids, output_scaler, scale)
     
     # Prepare and return results
     test_results = prepare_results(test_qids, test_predictions, test_ground_truth)

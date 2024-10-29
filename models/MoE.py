@@ -61,8 +61,38 @@ class MoE(nn.Module):
     def forward(self, x):
         expert_outputs = torch.stack([expert(x) for expert in self.experts], dim=1)
         # squeeze the expert outputs to remove the last dimension
-        gate_probs = self.gate(x)
-        final_output = torch.sum(gate_probs.unsqueeze(-1) * expert_outputs, dim=1)
+        # gate_probs = self.gate(x)
+        final_output = torch.sum(expert_outputs, dim=1)
+        return final_output
+
+class MoEknownCov(nn.Module):
+    # define the __init__ method
+    def __init__(self, input_dim, hidden_dim, output_dim, num_experts, feature_dim):
+        super(MoEknownCov, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.num_experts = num_experts
+        self.expert_input_dim = feature_dim + 1
+        
+        self.experts = nn.ModuleList([create_expert_model(self.expert_input_dim, hidden_dim, output_dim) for _ in range(num_experts)])
+        self.gate = create_gate_model(input_dim, num_experts)
+        # define an aggregation model that combines the outputs of the experts
+
+    # define the forward method
+    def forward(self, x):
+        expert_outputs = []
+        for i in range(self.num_experts):
+            
+            expert_input = x[:, i, :]
+            
+            expert_output = self.experts[i](expert_input)
+            # append the expert output to the expert outputs list
+            expert_outputs.append(expert_output)
+        expert_outputs = torch.stack(expert_outputs, dim=1)
+        # squeeze the expert outputs to remove the last dimension
+        # gate_probs = self.gate(x)
+        final_output = torch.sum(expert_outputs, dim=1)
         return final_output
 
 # write a function that creates the expert model
@@ -84,7 +114,7 @@ def create_gate_model(input_dim, num_experts):
     )
     return model
 
-def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, val_df=None, plot=False):
+def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, val_df=None, plot=False, model_name="MoE"):
     # use cuda if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training the model on {device}")
@@ -92,26 +122,45 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
 
     # shuffle the training data
     train_df = train_df.sample(frac=1).reset_index(drop=True)
-    X = train_df[covariates].values
+    
+    
     T = train_df[treatment].values
     Y = train_df[outcome].values
-    X_T = np.concatenate([X, T.reshape(-1, 1)], axis=1)
-    # print(X_T.shape)
-    
+    if model_name in ["Baseline", "MoE"]:
+        X = train_df[covariates].values
+        X_T = np.concatenate([X, T.reshape(-1, 1)], axis=1)
+        X_T = torch.tensor(X_T, dtype=torch.float32).to(device)
+    else:
+        # get feature of each module
+        X_module_wise_array = []
+        for i in range(num_modules):
+            module_features = [f"module_{i+1}_feature_feature_{j}" for j in range(num_feature_dimensions)]
+            X_module_wise = train_df[module_features].values.reshape(-1, num_feature_dimensions)
+            X_module_wise_T = np.concatenate([X_module_wise, T.reshape(-1, 1)], axis=1)
+            X_module_wise_T = torch.tensor(X_module_wise_T, dtype=torch.float32).to(device)
+            X_module_wise_array.append(X_module_wise_T)
+
+    Y = torch.tensor(Y, dtype=torch.float32).reshape(-1, 1).to(device)
+
     loss_fn = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     
-    X_T = torch.tensor(X_T, dtype=torch.float32).to(device)
-    Y = torch.tensor(Y, dtype=torch.float32).reshape(-1, 1).to(device)
     
     # Prepare validation data if provided
     if val_df is not None:
-        X_val = val_df[covariates].values
-        T_val = val_df[treatment].values
-        Y_val = val_df[outcome].values
-        X_T_val = np.concatenate([X_val, T_val.reshape(-1, 1)], axis=1)
-        X_T_val = torch.tensor(X_T_val, dtype=torch.float32)
-        Y_val = torch.tensor(Y_val, dtype=torch.float32).reshape(-1, 1)
+        if model_name in ["Baseline", "MoE"]:
+            X_val = val_df[covariates].values
+            X_T_val = np.concatenate([X_val, val_df[treatment].values.reshape(-1, 1)], axis=1)
+            X_T_val = torch.tensor(X_T_val, dtype=torch.float32).to(device)
+        else:
+            X_module_wise_val_array = []
+            for i in range(num_modules):
+                module_features = [f"module_{i+1}_feature_feature_{j}" for j in range(num_feature_dimensions)]
+                X_module_wise_val = val_df[module_features].values
+                X_module_wise_T_val = np.concatenate([X_module_wise_val, val_df[treatment].values.reshape(-1, 1)], axis=1)
+                X_module_wise_T_val = torch.tensor(X_module_wise_T_val, dtype=torch.float32).to(device)
+                X_module_wise_val_array.append(X_module_wise_T_val)
+            Y_val = torch.tensor(val_df[outcome].values, dtype=torch.float32).reshape(-1, 1).to(device)
     
     train_losses = []
     val_losses = []
@@ -119,8 +168,15 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0
-        for i in range(0, X_T.shape[0], batch_size):
-            X_T_batch = X_T[i:i+batch_size]
+        for i in range(0, Y.shape[0], batch_size):
+            if model_name in ["Baseline", "MoE"]:
+                X_T_batch = X_T[i:i+batch_size]
+            else:
+                # get list of tensors for each module
+                X_T_batch = [X_module_wise_array[j][i:i+batch_size] for j in range(num_modules)] # make it a list of tensors
+                X_T_batch = torch.stack(X_T_batch, dim=1) # stack the list of tensors to make a tensor
+                
+                
             Y_batch = Y[i:i+batch_size]
             
             optimizer.zero_grad()
@@ -131,7 +187,7 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
             
             epoch_loss += loss.item()
         
-        avg_train_loss = epoch_loss / (X_T.shape[0] // batch_size)
+        avg_train_loss = epoch_loss / (Y.shape[0] // batch_size)
         train_losses.append(avg_train_loss)
         # print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}")
         
@@ -161,16 +217,36 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     
     return model, train_losses, val_losses
 # Prediction function for both models
-def predict_model(model, test_df, covariates, return_effect=True, return_po=False):
+def predict_model(model, test_df, covariates, num_modules, num_feature_dimensions, return_effect=True, return_po=False, model_name="MoE"):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
-    X = test_df[covariates].values
     
-    X_1 = np.concatenate([X, np.ones((X.shape[0], 1))], axis=1)
-    X_0 = np.concatenate([X, np.zeros((X.shape[0], 1))], axis=1)
-    X_1 = torch.tensor(X_1, dtype=torch.float32).to(device)
-    X_0 = torch.tensor(X_0, dtype=torch.float32).to(device)
+    if model_name in ["Baseline", "MoE"]:
+        X = test_df[covariates].values
+    
+        X_1 = np.concatenate([X, np.ones((X.shape[0], 1))], axis=1)
+        X_0 = np.concatenate([X, np.zeros((X.shape[0], 1))], axis=1)
+        X_1 = torch.tensor(X_1, dtype=torch.float32).to(device)
+        X_0 = torch.tensor(X_0, dtype=torch.float32).to(device)
+    else:
+        X_1 = []
+        X_0 = []
+        for i in range(num_modules):
+            module_features = [f"module_{i+1}_feature_feature_{j}" for j in range(num_feature_dimensions)]
+            X_module_wise = test_df[module_features].values.reshape(-1, num_feature_dimensions)
+            X_module_wise_1 = np.concatenate([X_module_wise, np.ones((X_module_wise.shape[0], 1))], axis=1)
+            X_module_wise_0 = np.concatenate([X_module_wise, np.zeros((X_module_wise.shape[0], 1))], axis=1)
+            X_module_wise_1 = torch.tensor(X_module_wise_1, dtype=torch.float32).to(device)
+            X_module_wise_0 = torch.tensor(X_module_wise_0, dtype=torch.float32).to(device)
+            X_1.append(X_module_wise_1)
+            X_0.append(X_module_wise_0)
 
+        # convert the list of tensors to a tensor whuch can still be indexed without indexing
+        X_1 = torch.stack(X_1, dim=1)
+        X_0 = torch.stack(X_0, dim=1)
+   
+
+        
     with torch.no_grad():
         predicted_outcome_1 = model(X_1).cpu().numpy()
         predicted_outcome_0 = model(X_0).cpu().numpy()

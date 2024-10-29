@@ -8,6 +8,7 @@ from domains.tree_data_structures import ExpressionNode, QueryPlanNode, Node
 import pickle
 import matplotlib.pyplot as plt
 from sklearn.metrics import r2_score
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 # load trees from JSON files.
 # Return the tree-structured units grouped by depth because it will be used to create batches.
@@ -278,7 +279,7 @@ def pehe(ground_truth, estimated):
 def get_r2_score(ground_truth, estimated):
     return r2_score(ground_truth, estimated)
 
-def scale_df(df_apo, df_sampled, scaler_path, csv_path, composition_type, covariates):
+def scale_df(df_apo, df_sampled, scaler_path, csv_path, composition_type, covariates, data_dist):
 
     if composition_type == "parallel":
         module_files = os.listdir(f"{csv_path}/")
@@ -305,11 +306,23 @@ def scale_df(df_apo, df_sampled, scaler_path, csv_path, composition_type, covari
         df_sampled["query_output"] = df_sampled[module_output_columns].sum(axis=1)
 
     else:
-        # just scale the covariates
-        df_apo[covariates] = df_apo[covariates].apply(lambda x: (x - x.mean()) / x.std())
-        df_sampled[covariates] = df_sampled[covariates].apply(lambda x: (x - x.mean()) / x.std())
+        # scale the covariates and the query_output
+        if data_dist == "normal":
+            apo_covariates_scaler = StandardScaler()
+            sampled_covariates_scaler = StandardScaler()
+        elif data_dist == "uniform":
+            apo_covariates_scaler = MinMaxScaler()
+            sampled_covariates_scaler = MinMaxScaler()
+        
+        # output scalers is the same for both apo and sampled
+        apo_output_scaler = StandardScaler()
+        sampled_output_scaler = StandardScaler()
 
-
+        # return scalers to scale the data later if needed
+        df_apo[covariates] = apo_covariates_scaler.fit_transform(df_apo[covariates].values)
+        df_sampled[covariates] = sampled_covariates_scaler.fit_transform(df_sampled[covariates].values)
+        df_apo["query_output"] = apo_output_scaler.fit_transform(df_apo["query_output"].values.reshape(-1, 1))
+        df_sampled["query_output"] = sampled_output_scaler.fit_transform(df_sampled["query_output"].values.reshape(-1, 1))
     return df_apo, df_sampled
             
 

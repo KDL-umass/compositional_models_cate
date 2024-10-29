@@ -67,7 +67,9 @@ def f7_module(*inputs, w):
 def f8_module(*inputs, w):
     X = np.array(inputs)
     Mj = len(X)
-    return w[0] * np.exp(-np.dot(X, w[1:Mj+1])) / (1 + np.exp(-np.dot(X, w[1:Mj+1]))) + w[-1]
+
+    # have non-exponential function
+    return np.polyval(w, inputs)[0]
 
 def f9_module(*inputs, w):
     X = np.array(inputs)
