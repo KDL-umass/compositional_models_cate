@@ -114,7 +114,7 @@ def create_gate_model(input_dim, num_experts):
     )
     return model
 
-def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, val_df=None, plot=False, model_name="MoE"):
+def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, val_df=None, plot=False, model_name="MoE", scheduler_flag=False):
     # use cuda if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Training the model on {device}")
@@ -143,7 +143,20 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
     Y = torch.tensor(Y, dtype=torch.float32).reshape(-1, 1).to(device)
 
     loss_fn = nn.MSELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    if scheduler_flag == False:
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Slightly lower initial learning rate
+
+        # Cosine annealing with warm restarts
+        # T_0 is the number of epochs before first restart
+        # T_mult=2 means each restart cycle will be twice as long as the previous one
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=10,  # First restart occurs after 10 epochs
+            T_mult=2,  # Each restart cycle is twice as long
+            eta_min=1e-6  # Minimum learning rate
+        )
     
     
     # Prepare validation data if provided
@@ -183,12 +196,16 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
             output = model(X_T_batch)
             loss = loss_fn(output, Y_batch)
             loss.backward()
+            # Add gradient clipping for stability
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             
             epoch_loss += loss.item()
         
         avg_train_loss = epoch_loss / (Y.shape[0] // batch_size)
         train_losses.append(avg_train_loss)
+        if scheduler_flag == True:
+            scheduler.step()
         # print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}")
         
         # Validation step
@@ -204,7 +221,7 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
         #     print(f"Epoch {epoch+1}/{epochs}, Train Loss: {avg_train_loss:.4f}")
         
         # Plot losses every 10 epochs or at the end of training
-        if ((epoch + 1) % 10 == 0 or epoch == epochs - 1) and plot == True:
+        if (epoch == epochs - 1) and plot == True:
             plt.figure(figsize=(10, 5))
             plt.plot(range(1, epoch + 2), train_losses, label='Training Loss')
             if val_df is not None:

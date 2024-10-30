@@ -148,8 +148,9 @@ for variable in num_train_modules:
             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
         
         estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
-            model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=True
-        )
+            model, train_df, test_df, covariates, treatment, outcome, args.epochs*10, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=True, model_name=model_name, scheduler_flag=True
+            )
+        
         gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
         estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)

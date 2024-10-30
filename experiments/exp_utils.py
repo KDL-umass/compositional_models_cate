@@ -41,7 +41,7 @@ def parse_arguments(jupyter=False):
     # model_class
     parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
     # run_env
-    parser.add_argument("--run_env", type=str, default="unity", help="Run environment")
+    parser.add_argument("--run_env", type=str, default="local", help="Run environment")
     # use_subset_features
     parser.add_argument("--use_subset_features", type=bool, default=False, help="Use subset features")
     # generate trees systematically for creating OOD data
@@ -85,8 +85,8 @@ def load_train_test_data(csv_path, args, df_sampled):
     test_df = df_sampled[df_sampled["query_id"].isin(test_qids)]
     return train_df, test_df, train_qids, test_qids
 
-def train_and_evaluate_model(model, train_df, test_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, train_qids, test_qids,plot=False, model_name="MoE"):
-    model, _, _ = train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, plot=plot, model_name=model_name)
+def train_and_evaluate_model(model, train_df, test_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, train_qids, test_qids,plot=False, model_name="MoE",scheduler_flag=False):
+    model, _, _ = train_model(model, train_df, covariates, treatment, outcome, epochs, batch_size, num_modules, num_feature_dimensions, plot=plot, model_name=model_name,scheduler_flag=scheduler_flag)
     
     train_estimates = predict_model(model, train_df, covariates, num_modules, num_feature_dimensions, return_effect=True, model_name=model_name)
     test_estimates = predict_model(model, test_df, covariates, num_modules, num_feature_dimensions, return_effect=True, model_name=model_name)
