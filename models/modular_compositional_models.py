@@ -130,6 +130,8 @@ def get_additive_model_effects(csv_path, obs_data_path, train_qids, test_qids, h
         test_df["estimated_effect"] = causal_effect_estimates_test
         train_data[module_file] = train_df
         test_data[module_file] = test_df
+        # save the trained model
+        # torch.save(expert_model.state_dict(), f"{scaler_path}/trained_models_hl_{use_high_level_features}/{module_file}.pt")
 
     # now for each module, get the ground truth and estimated effects
     additive_ground_truth_effects_train = {}
@@ -455,6 +457,9 @@ def get_sequential_model_effects(csv_path, obs_data_path, train_qids, test_qids,
     # Train models with access to fine-grained potential outcomes
     trained_models = train_modular_model_with_po(train_data, module_files, domain, model_misspecification, underlying_model_class, hidden_dim, epochs, batch_size, output_dim, train_df,  covariates, use_high_level_features)
 
+    # save the trained models as .pt files
+    # for module_file, model in trained_models.items():
+    #     torch.save(model.state_dict(), f"{scaler_path}/trained_models_hl_{use_high_level_features}/{module_file}.pt")
     # Compute predictions
     train_jsons = {k:v for k,v in jsons_0.items() if k in train_qids}
     test_jsons = {k:v for k,v in jsons_0.items() if k in test_qids}

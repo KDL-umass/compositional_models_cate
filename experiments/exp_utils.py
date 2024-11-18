@@ -21,7 +21,7 @@ def parse_arguments(jupyter=False):
     parser.add_argument("--num_modules", type=int, default=10, help="Number of modules")
     parser.add_argument("--num_feature_dimensions", type=int, default=1, help="Number of feature dimensions")
     parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples")
-    parser.add_argument("--composition_type", type=str, default="hierarchical", help="Composition type")
+    parser.add_argument("--composition_type", type=str, default="parallel", help="Composition type")
     parser.add_argument("--resample", type=bool, default=True, help="Resample data")
     parser.add_argument("--seed", type=int, default=45, help="Seed for reproducibility")
     parser.add_argument("--fixed_structure", type=bool, default=False, help="Fixed structure flag")
@@ -41,7 +41,7 @@ def parse_arguments(jupyter=False):
     # model_class
     parser.add_argument("--underlying_model_class", type=str, default="MLP", help="Model class")
     # run_env
-    parser.add_argument("--run_env", type=str, default="local", help="Run environment")
+    parser.add_argument("--run_env", type=str, default="unity", help="Run environment")
     # use_subset_features
     parser.add_argument("--use_subset_features", type=bool, default=False, help="Use subset features")
     # generate trees systematically for creating OOD data
@@ -201,7 +201,7 @@ def combine_model_effects(gt_effects, model_effects, additive_combined_df):
     # Add effects from the additive model
     additive_effects = additive_combined_df.set_index('query_id')['estimated_effect']
     additive_gt_effects = additive_combined_df.set_index('query_id')['ground_truth_effect']
-    combined_df['Additive_effect'] = combined_df['query_id'].map(additive_effects)
-    combined_df['Additive_gt_effect'] = combined_df['query_id'].map(additive_gt_effects)
+    combined_df['low_level_effect'] = combined_df['query_id'].map(additive_effects)
+    combined_df['low_level_gt_effect'] = combined_df['query_id'].map(additive_gt_effects)
     
     return combined_df

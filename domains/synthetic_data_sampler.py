@@ -433,7 +433,7 @@ class SyntheticDataSampler:
             split_idx = int(num_train_modules-1)
             print("split_idx: ", split_idx)
             
-            train_depths, test_depths = [depths[split_idx-1]], depths[split_idx:]
+            train_depths, test_depths = depths[:split_idx], depths[split_idx:]
             if test_on_last_depth:
                 test_depths = [depths[-1]]
 

@@ -144,9 +144,9 @@ def train_model(model, train_df, covariates, treatment, outcome, epochs, batch_s
 
     loss_fn = nn.MSELoss()
     if scheduler_flag == False:
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.01)
     else:
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)  # Slightly lower initial learning rate
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.01)
 
         # Cosine annealing with warm restarts
         # T_0 is the number of epochs before first restart

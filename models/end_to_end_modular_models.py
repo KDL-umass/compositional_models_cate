@@ -319,6 +319,8 @@ def get_end_to_end_modular_model_effects(csv_path, obs_data_path, train_qids, te
     # Train the model
     train_end_to_end_modular_model(model, X, y, json_structures, epochs, batch_size)
     
+    # save the model
+    # torch.save(model.state_dict(), f"models/{domain}_hl_{use_high_level_features}_end_to_end_modular_model.pth")
     # Make predictions
     if evaluate_train:
         train_predictions = predict_end_to_end_modular_model(model, train_data, jsons_0, jsons_1, scalers, output_scaler, scale, use_high_level_features, train_df, covariates)

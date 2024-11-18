@@ -16,6 +16,151 @@ from models.utils import *
 from exp_utils import *
 warnings.filterwarnings('ignore')
 
+from econml.metalearners import XLearner, TLearner, SLearner
+from sklearn.ensemble import RandomForestRegressor
+from econml.dml import NonParamDML
+
+
+def x_learner(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    
+    if len(covariates) == 1:
+        X = X.reshape(-1, 1)
+    
+    T = df[treatment].values
+    Y = df[outcome].values   
+    est = XLearner(models=[RandomForestRegressor(n_estimators=100), RandomForestRegressor(n_estimators=100)])
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+        if len(covariates) == 1:
+            X_test = X_test.reshape(-1, 1)
+    causal_effect_estimates = est.effect(X_test)
+
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+    
+    return causal_effect_estimates
+
+def s_learner(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    
+    if len(covariates) == 1:
+        X = X.reshape(-1, 1)
+    
+    T = df[treatment].values
+    Y = df[outcome].values   
+    est = XLearner(models=RandomForestRegressor(n_estimators=100))
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+        if len(covariates) == 1:
+            X_test = X_test.reshape(-1, 1)
+    causal_effect_estimates = est.effect(X_test)
+
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+    
+    return causal_effect_estimates
+
+def t_learner(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    
+    if len(covariates) == 1:
+        X = X.reshape(-1, 1)
+    
+    T = df[treatment].values
+    Y = df[outcome].values   
+    est = TLearner(models=[RandomForestRegressor(n_estimators=100), RandomForestRegressor(n_estimators=100)])
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+        if len(covariates) == 1:
+            X_test = X_test.reshape(-1, 1)
+    causal_effect_estimates = est.effect(X_test)
+
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+    
+    return causal_effect_estimates
+
+def non_param_DML(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    T = df[treatment].values
+    Y = df[outcome].values
+
+    est = NonParamDML(model_y=RandomForestRegressor(n_estimators=100, max_depth=10),
+                  model_t=RandomForestRegressor(n_estimators=100, max_depth=10),
+                  model_final=RandomForestRegressor(n_estimators=100, max_depth=10))
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+    
+    causal_effect_estimates = est.effect(X_test, T0=0, T1=1)
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+
+    # this method only returns the effect estimates
+    return causal_effect_estimates
+
+def random_forest(df, covariates, treatment, outcome, X_test=None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    T = df[treatment].values
+    Y = df[outcome].values
+    print(X.shape, T.shape, Y.shape)
+
+    # concatenate the features and treatment
+    X_T = np.concatenate([X, T[:, None]], axis=1)
+    # Fit the random forest models
+    est = RandomForestRegressor(n_estimators=100, max_depth=10)
+    est.fit(X_T, Y)
+
+    if X_test is None:
+        X_test = X
+    else:
+        X_test = X_test[covariates].values
+    X_0 = np.concatenate([X_test, np.zeros((X_test.shape[0], 1))], axis=1)
+    X_1 = np.concatenate([X_test, np.ones((X_test.shape[0], 1))], axis=1)
+    # Predict the outcomes
+    y1 = est.predict(X_1)
+    y0 = est.predict(X_0)
+
+    if output_scaler is not None:
+        y1 = output_scaler.inverse_transform(y1.reshape(-1, 1)).flatten()
+        y0 = output_scaler.inverse_transform(y0.reshape(-1, 1)).flatten()
+    causal_effect_estimates = y1 - y0
+
+    return causal_effect_estimates, y1, y0
+
 
 args = parse_arguments()
 
@@ -23,13 +168,12 @@ args = parse_arguments()
 all_results = {}
 all_results_train_size = {}
 noise = 1
-num_train_modules = list(range(2, args.num_modules + 1))
-
+num_train_modules = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 exp = "CG"
 
 for variable in num_train_modules:
     if exp == "noise":
-        train_modules = args.num_modules - 1
+        train_modules = 3
         noise = variable
     else:
         noise = 0
@@ -135,26 +279,54 @@ for variable in num_train_modules:
         hidden_dim = args.hidden_dim 
     else:
         hidden_dim = (input_dim + 1)*2
+
     models = {
-        # # high-level model
-        "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
-        # # high-level model wirh same number of modules
-        "MoE": MoE if args.underlying_model_class == "MLP" else MoELinearModel,
-        "MoEknownCov": MoEknownCov,
+        "XLearner": None,
+        "TLearner": None,
+        "SLearner": None,
+        "RandomForest": None,
+        "NonParamDML": None
     }
+    nn_models = { "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel}
     results = {}
     for model_name, model_class in models.items():
+        if model_name == "XLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = x_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = x_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "TLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = t_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = t_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "SLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = s_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = s_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "RandomForest":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values, _, _ = random_forest(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values, _, _ = random_forest(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "NonParamDML":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = non_param_DML(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = non_param_DML(train_df, covariates, treatment, outcome, X_test=test_df)
+        gt_effects_test_values = np.array(list(gt_effects_test.values()))
+        gt_effects_train_values = np.array(list(gt_effects_train.values()))
+        results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+        results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+
+    print(results)
+    for model_name, model_class in nn_models.items():
         print(f"Training {model_name} Model")
         if model_name == "Baseline":
             model = model_class(input_dim + 1, hidden_dim, args.output_dim)
-        elif model_name == "MoE":
+        else:
             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
-        elif model_name == "MoEknownCov":
-            model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
         
         estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
-            model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
-        )
+            model, train_df, test_df, covariates, treatment, outcome, args.epochs*10, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name, scheduler_flag=True
+            )
+        
         gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
         estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
@@ -162,7 +334,70 @@ for variable in num_train_modules:
         model_effects_train[model_name] = estimated_effects_train
         model_effects_test[model_name] = estimated_effects_test
 
-    print(results)
+    
+    # models = {
+    #     "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
+    #     "XLearner": None
+    # }
+    # results = {}
+    # for model_name, model_class in models.items():
+    #     if model_name == "XLearner":
+    #         print(f"Training {model_name} Model")
+    #         estimated_effects_train_values = x_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+    #         estimated_effects_test_values = x_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+    #         gt_effects_test_values = np.array(list(gt_effects_test.values()))
+    #         gt_effects_train_values = np.array(list(gt_effects_train.values()))
+    #         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+    #         results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+    #     else:
+    #         if model_name == "Baseline":
+    #             model = model_class(input_dim + 1, hidden_dim, args.output_dim)
+    #         elif model_name == "MoE":
+    #             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
+    #         elif model_name == "MoEknownCov":
+    #             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
+        
+    #         estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
+    #             model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
+    #         )
+    #         gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
+    #         estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
+    #         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+    #         results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+    #         model_effects_train[model_name] = estimated_effects_train
+    #         model_effects_test[model_name] = estimated_effects_test
+    # print(results)
+    # models = {
+    #     # # high-level model
+    #     # "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
+    #     # # high-level model wirh same number of modules
+    #     "MoE": MoE if args.underlying_model_class == "MLP" else MoELinearModel,
+    #     # "MoEknownCov": MoEknownCov,
+    # }
+    # results = {}
+    # for model_name, model_class in models.items():
+    #     print(f"Training {model_name} Model")
+    #     if model_name == "Baseline":
+    #         model = model_class(input_dim + 1, hidden_dim, args.output_dim)
+    #     elif model_name == "MoE":
+    #         model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
+    #     elif model_name == "MoEknownCov":
+    #         model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
+        
+    #     estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
+    #         model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
+    #     )
+    #     gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
+    #     estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
+    #     results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+    #     results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+    #     model_effects_train[model_name] = estimated_effects_train
+    #     model_effects_test[model_name] = estimated_effects_test
+    #     # save model as .pth file
+    #     # torch.save(model.state_dict(), f"{main_dir}/results/systematic_{args.systematic}/{model_name}_model.pth")
+        
+
+    # print(results)
     # evaluate_train = False
     
     # Catenets (for causal effect estimation reference)
@@ -214,12 +449,18 @@ for variable in num_train_modules:
     results["Module_PEHE_unknown_cov_decomposition_train"] = module_pehe_sum_train, module_cov_train
     print(results)
    
-    
-
     all_results[str(variable)] = results
+    print(all_results)
 
-    # save all_results
-    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}.json", "w") as f:
+    # # save all_results
+    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_all_baselines_again.json", "w") as f:
         json.dump(all_results, f)
 
-    print(all_results)
+
+    # all_results[str(variable)] = results
+
+    # # save all_results
+    # with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_rerun.json", "w") as f:
+    #     json.dump(all_results, f)
+
+    # print(all_results)

@@ -15,7 +15,150 @@ from models.MoE import *
 from models.utils import *
 from exp_utils import *
 warnings.filterwarnings('ignore')
+from econml.metalearners import XLearner, TLearner, SLearner
+from sklearn.ensemble import RandomForestRegressor
+from econml.dml import NonParamDML
 
+
+def x_learner(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    
+    if len(covariates) == 1:
+        X = X.reshape(-1, 1)
+    
+    T = df[treatment].values
+    Y = df[outcome].values   
+    est = XLearner(models=[RandomForestRegressor(n_estimators=100), RandomForestRegressor(n_estimators=100)])
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+        if len(covariates) == 1:
+            X_test = X_test.reshape(-1, 1)
+    causal_effect_estimates = est.effect(X_test)
+
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+    
+    return causal_effect_estimates
+
+def s_learner(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    
+    if len(covariates) == 1:
+        X = X.reshape(-1, 1)
+    
+    T = df[treatment].values
+    Y = df[outcome].values   
+    est = XLearner(models=RandomForestRegressor(n_estimators=100))
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+        if len(covariates) == 1:
+            X_test = X_test.reshape(-1, 1)
+    causal_effect_estimates = est.effect(X_test)
+
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+    
+    return causal_effect_estimates
+
+def t_learner(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    
+    if len(covariates) == 1:
+        X = X.reshape(-1, 1)
+    
+    T = df[treatment].values
+    Y = df[outcome].values   
+    est = TLearner(models=[RandomForestRegressor(n_estimators=100), RandomForestRegressor(n_estimators=100)])
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+        if len(covariates) == 1:
+            X_test = X_test.reshape(-1, 1)
+    causal_effect_estimates = est.effect(X_test)
+
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+    
+    return causal_effect_estimates
+
+def non_param_DML(df, covariates, treatment, outcome, X_test = None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    T = df[treatment].values
+    Y = df[outcome].values
+
+    est = NonParamDML(model_y=RandomForestRegressor(n_estimators=100, max_depth=10),
+                  model_t=RandomForestRegressor(n_estimators=100, max_depth=10),
+                  model_final=RandomForestRegressor(n_estimators=100, max_depth=10))
+    est.fit(Y, T, X=X)
+
+    # if X_test is None, then evaluate on the training data
+    if X_test is None:
+        X_test = X
+    else:
+    # otherwise evaluate on the test data
+        X_test = X_test[covariates].values
+    
+    causal_effect_estimates = est.effect(X_test, T0=0, T1=1)
+    # scale back the output if output_scaler is provided
+    if output_scaler is not None:
+        causal_effect_estimates = output_scaler.inverse_transform(causal_effect_estimates.reshape(-1, 1)).flatten()
+
+    # this method only returns the effect estimates
+    return causal_effect_estimates
+
+def random_forest(df, covariates, treatment, outcome, X_test=None, output_scaler=None):
+    # Split the data into features, treatment, and outcome
+    X = df[covariates].values
+    T = df[treatment].values
+    Y = df[outcome].values
+    print(X.shape, T.shape, Y.shape)
+
+    # concatenate the features and treatment
+    X_T = np.concatenate([X, T[:, None]], axis=1)
+    # Fit the random forest models
+    est = RandomForestRegressor(n_estimators=100, max_depth=10)
+    est.fit(X_T, Y)
+
+    if X_test is None:
+        X_test = X
+    else:
+        X_test = X_test[covariates].values
+    X_0 = np.concatenate([X_test, np.zeros((X_test.shape[0], 1))], axis=1)
+    X_1 = np.concatenate([X_test, np.ones((X_test.shape[0], 1))], axis=1)
+    # Predict the outcomes
+    y1 = est.predict(X_1)
+    y0 = est.predict(X_0)
+
+    if output_scaler is not None:
+        y1 = output_scaler.inverse_transform(y1.reshape(-1, 1)).flatten()
+        y0 = output_scaler.inverse_transform(y0.reshape(-1, 1)).flatten()
+    causal_effect_estimates = y1 - y0
+
+    return causal_effect_estimates, y1, y0
 
 args = parse_arguments()
 
@@ -23,7 +166,7 @@ args = parse_arguments()
 all_results = {}
 all_results_train_size = {}
 noise = 1
-num_train_modules = [args.num_modules]
+num_train_modules = list(range(2, args.num_modules + 1))
 
 exp = "CG"
 for variable in num_train_modules:
@@ -137,10 +280,42 @@ for variable in num_train_modules:
     else:
         hidden_dim = (input_dim + 1)*2
     models = {
-        "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
+        "XLearner": None,
+        "TLearner": None,
+        "SLearner": None,
+        "RandomForest": None,
+        "NonParamDML": None
     }
+    nn_models = { "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel}
     results = {}
     for model_name, model_class in models.items():
+        if model_name == "XLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = x_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = x_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "TLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = t_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = t_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "SLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = s_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = s_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "RandomForest":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values, _, _ = random_forest(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values, _, _ = random_forest(train_df, covariates, treatment, outcome, X_test=test_df)
+        elif model_name == "NonParamDML":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = non_param_DML(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = non_param_DML(train_df, covariates, treatment, outcome, X_test=test_df)
+        gt_effects_test_values = np.array(list(gt_effects_test.values()))
+        gt_effects_train_values = np.array(list(gt_effects_train.values()))
+        results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+        results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+
+    print(results)
+    for model_name, model_class in nn_models.items():
         print(f"Training {model_name} Model")
         if model_name == "Baseline":
             model = model_class(input_dim + 1, hidden_dim, args.output_dim)
@@ -148,7 +323,7 @@ for variable in num_train_modules:
             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
         
         estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
-            model, train_df, test_df, covariates, treatment, outcome, args.epochs*10, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=True, model_name=model_name, scheduler_flag=True
+            model, train_df, test_df, covariates, treatment, outcome, args.epochs*10, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name, scheduler_flag=True
             )
         
         gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
@@ -158,8 +333,8 @@ for variable in num_train_modules:
         model_effects_train[model_name] = estimated_effects_train
         model_effects_test[model_name] = estimated_effects_test
 
-    print(results)
-    # evaluate_train = False
+    # print(results)
+    # # evaluate_train = False
     
     # # Catenets
     # print("Training Catenets Model")
@@ -203,7 +378,8 @@ for variable in num_train_modules:
     #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train
     #     )
     # results["End_to_End_known_cov_test"] = calculate_metrics(end_to_end_test_df["ground_truth_effect"], end_to_end_test_df["estimated_effect"])
-    
+    # # save end_to_end_test_df
+    # end_to_end_test_df.to_csv(f"{results_csv_folder}/end_to_end_known_cov_combined_test_df.csv")
 
     # if evaluate_train:
     #     end_to_end_train_df, end_to_end_test_df = get_end_to_end_modular_model_effects(
@@ -230,7 +406,8 @@ for variable in num_train_modules:
     #     )
     # results["End_to_End_unknown_cov_test"] = calculate_metrics(end_to_end_test_df["ground_truth_effect"], end_to_end_test_df["estimated_effect"])
     # print(results)
-    # end_to_end_test_df.to_csv(f"{results_csv_folder}/end_to_end_combined_test_df.csv", index=False)
+    # end_to_end_test_df.to_csv(f"{results_csv_folder}/end_to_end_unknown_cov_combined_test_df.csv")
+    
     # combined_df_test = combine_model_effects(gt_effects_test, model_effects_test, end_to_end_test_df)
     
     # # Call the sequential model function with the access to the module wise outputs
@@ -258,7 +435,7 @@ for variable in num_train_modules:
     #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, data_dist=args.data_dist, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
     #     )
     # results["Sequential_known_cov_test"] = calculate_metrics(sequential_test_df["ground_truth_effect"], sequential_test_df["estimated_effect"])
-
+    # sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_known_cov_test_df.csv")
 
     # # Call the sequential model function with the access to the module wise outputs
     # if evaluate_train:
@@ -285,6 +462,7 @@ for variable in num_train_modules:
     #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
     #     )
     # results["Sequential_unknown_cov_test"] = calculate_metrics(sequential_test_df["ground_truth_effect"], sequential_test_df["estimated_effect"])
+    # sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_unknown_cov_test_df.csv")
     # print(results)
 
     
@@ -293,21 +471,25 @@ for variable in num_train_modules:
 
     # # Create combined DataFrames (assuming these functions are still relevant for sequential model)
     
-    # # combined_df_test = combine_model_effects(gt_effects_test, model_effects_test, sequential_test_df)
-
-    # # # Save combined DataFrames
     
-    # # combined_df_test.to_csv(f"{results_csv_folder}/combined_effects_test.csv", index=False)
 
     # print(results)
     # print(f"Results saved at {results_path}")
     # print(f"CSVs saved at {results_csv_folder}")
     # print("Done!")
 
-    # all_results[str(variable)] = results
+    all_results[str(variable)] = results
+    print(all_results)
 
     # # save all_results
-    # with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_10_10.json", "w") as f:
-    #     json.dump(all_results, f)
+    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_all_baselines.json", "w") as f:
+        json.dump(all_results, f)
+
+    # combined_df_test = combine_model_effects(gt_effects_test, model_effects_test, sequential_test_df)
+    
+
+    # # # Save combined DataFrames
+    
+    # combined_df_test.to_csv(f"{results_csv_folder}/combined_effects_test_high_level_features.csv", index=False)
 
     # # all_results_train_size[test_size] = [sequential_train_df.shape[0], [len(sequential_train_df[sequential_train_df['query_id'].isin(qids)]) for qids in module_order.values()]]
