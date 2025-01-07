@@ -315,7 +315,7 @@ for variable in num_train_modules:
         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
         results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
 
-    print(results)
+    
     for model_name, model_class in nn_models.items():
         print(f"Training {model_name} Model")
         if model_name == "Baseline":
@@ -324,7 +324,7 @@ for variable in num_train_modules:
             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
         
         estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
-            model, train_df, test_df, covariates, treatment, outcome, args.epochs*10, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name, scheduler_flag=True
+            model, train_df, test_df, covariates, treatment, outcome, args.epochs*10, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name, scheduler_flag=False
             )
         
         gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
@@ -335,66 +335,66 @@ for variable in num_train_modules:
         model_effects_test[model_name] = estimated_effects_test
 
     
-    # models = {
-    #     "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
-    #     "XLearner": None
-    # }
-    # results = {}
-    # for model_name, model_class in models.items():
-    #     if model_name == "XLearner":
-    #         print(f"Training {model_name} Model")
-    #         estimated_effects_train_values = x_learner(train_df, covariates, treatment, outcome, X_test=train_df)
-    #         estimated_effects_test_values = x_learner(train_df, covariates, treatment, outcome, X_test=test_df)
-    #         gt_effects_test_values = np.array(list(gt_effects_test.values()))
-    #         gt_effects_train_values = np.array(list(gt_effects_train.values()))
-    #         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
-    #         results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
-    #     else:
-    #         if model_name == "Baseline":
-    #             model = model_class(input_dim + 1, hidden_dim, args.output_dim)
-    #         elif model_name == "MoE":
-    #             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
-    #         elif model_name == "MoEknownCov":
-    #             model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
+    models = {
+        "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
+        "XLearner": None
+    }
+    results = {}
+    for model_name, model_class in models.items():
+        if model_name == "XLearner":
+            print(f"Training {model_name} Model")
+            estimated_effects_train_values = x_learner(train_df, covariates, treatment, outcome, X_test=train_df)
+            estimated_effects_test_values = x_learner(train_df, covariates, treatment, outcome, X_test=test_df)
+            gt_effects_test_values = np.array(list(gt_effects_test.values()))
+            gt_effects_train_values = np.array(list(gt_effects_train.values()))
+            results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+            results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+        else:
+            if model_name == "Baseline":
+                model = model_class(input_dim + 1, hidden_dim, args.output_dim)
+            elif model_name == "MoE":
+                model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
+            elif model_name == "MoEknownCov":
+                model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
         
-    #         estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
-    #             model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
-    #         )
-    #         gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
-    #         estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
-    #         results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
-    #         results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
-    #         model_effects_train[model_name] = estimated_effects_train
-    #         model_effects_test[model_name] = estimated_effects_test
-    # print(results)
-    # models = {
-    #     # # high-level model
-    #     # "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
-    #     # # high-level model wirh same number of modules
-    #     "MoE": MoE if args.underlying_model_class == "MLP" else MoELinearModel,
-    #     # "MoEknownCov": MoEknownCov,
-    # }
-    # results = {}
-    # for model_name, model_class in models.items():
-    #     print(f"Training {model_name} Model")
-    #     if model_name == "Baseline":
-    #         model = model_class(input_dim + 1, hidden_dim, args.output_dim)
-    #     elif model_name == "MoE":
-    #         model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
-    #     elif model_name == "MoEknownCov":
-    #         model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
+            estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
+                model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
+            )
+            gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
+            estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
+            results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+            results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+            model_effects_train[model_name] = estimated_effects_train
+            model_effects_test[model_name] = estimated_effects_test
+    print(results)
+    models = {
+        # # high-level model
+        # "Baseline": BaselineModel if args.underlying_model_class == "MLP" else BaselineLinearModel,
+        # # high-level model wirh same number of modules
+        "MoE": MoE if args.underlying_model_class == "MLP" else MoELinearModel,
+        "MoEknownCov": MoEknownCov,
+    }
+    results = {}
+    for model_name, model_class in models.items():
+        print(f"Training {model_name} Model")
+        if model_name == "Baseline":
+            model = model_class(input_dim + 1, hidden_dim, args.output_dim)
+        elif model_name == "MoE":
+            model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules)
+        elif model_name == "MoEknownCov":
+            model = model_class(input_dim + 1, hidden_dim, args.output_dim, args.num_modules, args.num_feature_dimensions)
         
-    #     estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
-    #         model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
-    #     )
-    #     gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
-    #     estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
-    #     results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
-    #     results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
-    #     model_effects_train[model_name] = estimated_effects_train
-    #     model_effects_test[model_name] = estimated_effects_test
-    #     # save model as .pth file
-    #     # torch.save(model.state_dict(), f"{main_dir}/results/systematic_{args.systematic}/{model_name}_model.pth")
+        estimated_effects_train, estimated_effects_test = train_and_evaluate_model(
+            model, train_df, test_df, covariates, treatment, outcome, args.epochs, args.batch_size, args.num_modules, args.num_feature_dimensions, train_qids, test_qids, plot=False, model_name=model_name
+        )
+        gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
+        estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
+        results[f"{model_name}_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+        results[f"{model_name}_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+        model_effects_train[model_name] = estimated_effects_train
+        model_effects_test[model_name] = estimated_effects_test
+        # save model as .pth file
+        # torch.save(model.state_dict(), f"{main_dir}/results/systematic_{args.systematic}/{model_name}_model.pth")
         
 
     # print(results)
@@ -453,7 +453,7 @@ for variable in num_train_modules:
     print(all_results)
 
     # # save all_results
-    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_all_baselines_again.json", "w") as f:
+    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_identifiability_run_2.json", "w") as f:
         json.dump(all_results, f)
 
 

@@ -7,6 +7,8 @@ from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 from models.modular_compositional_models import split_modular_data
 import numpy as np
+import os
+import json
 
 # this creates a separate model for each module 
 class ModuleNet(nn.Module):
@@ -81,6 +83,7 @@ def create_modular_model(train_data, jsons_0, jsons_1, scale=False, use_high_lev
                 module_file = f"module_{module_id}.csv"
                 df = train_data[module_file]
                 module_covariates = [x for x in df.columns if "feature" in x]
+                print(module_covariates)
                 input_dim = len(module_covariates) + 1  # +1 for treatment
             
             # Create and fit scaler
@@ -118,6 +121,112 @@ def create_modular_model(train_data, jsons_0, jsons_1, scale=False, use_high_lev
     
     return ModularModel(module_configs), scalers, output_scaler
 
+def save_modular_model(model, scalers, output_scaler, save_dir, model_name="end_to_end_trained_modular_model"):
+    """
+    Save a ModularModel instance along with its scalers and configurations.
+    
+    Args:
+        model (ModularModel): The model to save
+        scalers (dict): Dictionary of StandardScaler objects for each module
+        output_scaler: StandardScaler for output normalization
+        save_dir (str): Directory to save the model files
+        model_name (str): Base name for the saved files
+    """
+    # Create directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Save model state dict
+    model_path = os.path.join(save_dir, f"{model_name}_state.pth")
+    model_state = {
+        module_id: module.state_dict() 
+        for module_id, module in model.modules.items()
+    }
+    torch.save(model_state, model_path)
+    
+    # Save module configurations
+    config_path = os.path.join(save_dir, f"{model_name}_config.json")
+    module_configs = {
+        module_id: {
+            'input_dim': module.net[0].in_features - 1,  # Subtract 1 for child output
+            'hidden_dim': module.net[0].out_features,
+            'output_dim': module.net[-1].out_features
+        }
+        for module_id, module in model.modules.items()
+    }
+    with open(config_path, 'w') as f:
+        json.dump(module_configs, f)
+    
+    # Save scalers
+    scaler_state = {
+        module_id: {
+            'mean_': scaler.mean_.tolist() if hasattr(scaler, 'mean_') else None,
+            'scale_': scaler.scale_.tolist() if hasattr(scaler, 'scale_') else None,
+            'var_': scaler.var_.tolist() if hasattr(scaler, 'var_') else None
+        }
+        for module_id, scaler in scalers.items()
+    }
+    
+    # Add output scaler
+    scaler_state['output'] = {
+        'mean_': output_scaler.mean_.tolist() if hasattr(output_scaler, 'mean_') else None,
+        'scale_': output_scaler.scale_.tolist() if hasattr(output_scaler, 'scale_') else None,
+        'var_': output_scaler.var_.tolist() if hasattr(output_scaler, 'var_') else None
+    }
+    
+    scaler_path = os.path.join(save_dir, f"{model_name}_scalers.json")
+    with open(scaler_path, 'w') as f:
+        json.dump(scaler_state, f)
+
+def load_modular_model(save_dir, model_name="modular_model"):
+    """
+    Load a saved ModularModel instance along with its scalers.
+    
+    Args:
+        save_dir (str): Directory containing the saved model files
+        model_name (str): Base name of the saved files
+        
+    Returns:
+        tuple: (loaded_model, loaded_scalers, loaded_output_scaler)
+    """
+    # Load module configurations
+    config_path = os.path.join(save_dir, f"{model_name}_config.json")
+    with open(config_path, 'r') as f:
+        module_configs = json.load(f)
+    
+    # Create new model instance
+    model = ModularModel(module_configs)
+    
+    # Load model state dict
+    model_path = os.path.join(save_dir, f"{model_name}_state.pth")
+    model_state = torch.load(model_path)
+    for module_id, state_dict in model_state.items():
+        model.modules[module_id].load_state_dict(state_dict)
+    
+    # Load scalers
+    scaler_path = os.path.join(save_dir, f"{model_name}_scalers.json")
+    with open(scaler_path, 'r') as f:
+        scaler_state = json.load(f)
+    
+    # Reconstruct scalers
+    scalers = {}
+    for module_id, state in scaler_state.items():
+        if module_id != 'output':
+            scaler = StandardScaler()
+            if state['mean_'] is not None:
+                scaler.mean_ = np.array(state['mean_'])
+                scaler.scale_ = np.array(state['scale_'])
+                scaler.var_ = np.array(state['var_'])
+            scalers[module_id] = scaler
+    
+    # Reconstruct output scaler
+    output_scaler = StandardScaler()
+    output_state = scaler_state['output']
+    if output_state['mean_'] is not None:
+        output_scaler.mean_ = np.array(output_state['mean_'])
+        output_scaler.scale_ = np.array(output_state['scale_'])
+        output_scaler.var_ = np.array(output_state['var_'])
+    
+    return model, scalers, output_scaler
 
 def prepare_data_for_training(train_data, jsons_0, jsons_1, train_qids, scalers, output_scaler, scale=False, use_high_level_features=False, train_df=None, covariates=None):
     X = {qid: {} for qid in train_qids}
@@ -318,6 +427,13 @@ def get_end_to_end_modular_model_effects(csv_path, obs_data_path, train_qids, te
     
     # Train the model
     train_end_to_end_modular_model(model, X, y, json_structures, epochs, batch_size)
+
+    # save the model
+    save_dir = f"models/{domain}_hl_{use_high_level_features}_end_to_end_modular_model"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_modular_model(model, scalers, output_scaler, save_dir)
+
     
     # save the model
     # torch.save(model.state_dict(), f"models/{domain}_hl_{use_high_level_features}_end_to_end_modular_model.pth")

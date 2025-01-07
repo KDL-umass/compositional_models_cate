@@ -166,7 +166,8 @@ args = parse_arguments()
 all_results = {}
 all_results_train_size = {}
 noise = 1
-num_train_modules = list(range(2, args.num_modules + 1))
+# num_train_modules = list(range(2, args.num_modules + 1))
+num_train_modules = [2, args.num_modules-1, args.num_modules]
 
 exp = "CG"
 for variable in num_train_modules:
@@ -188,7 +189,7 @@ for variable in num_train_modules:
                                     heterogeneity=args.heterogeneity, covariates_shared=args.covariates_shared, 
                                     use_subset_features=args.use_subset_features, systematic=args.systematic, 
                                     run_env=args.run_env, noise = noise)
-
+    print(sampler.csv_folder)
     # first sample the data and prepare it
     data, df_sampled = simulate_and_prepare_data(args, sampler, csv_path, obs_data_path, scaler_path, num_train_modules=train_modules, test_on_last_depth=True)
     
@@ -333,156 +334,156 @@ for variable in num_train_modules:
         model_effects_train[model_name] = estimated_effects_train
         model_effects_test[model_name] = estimated_effects_test
 
-    # print(results)
-    # # evaluate_train = False
+    print(results)
+    # evaluate_train = False
     
-    # # Catenets
-    # print("Training Catenets Model")
-    # estimated_effects_train, estimated_effects_test = train_and_evaluate_catenets(train_df, test_df, covariates, treatment, outcome, train_qids, test_qids)
-    # gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
-    # estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
-    # results["Catenets_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
-    # results["Catenets_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
-    # # Add Catenets effects
-    # model_effects_train["Catenets"] = estimated_effects_train
-    # model_effects_test["Catenets"] = estimated_effects_test
+    # Catenets
+    print("Training Catenets Model")
+    estimated_effects_train, estimated_effects_test = train_and_evaluate_catenets(train_df, test_df, covariates, treatment, outcome, train_qids, test_qids)
+    gt_effects_train_values, gt_effects_test_values = np.array(list(gt_effects_train.values())), np.array(list(gt_effects_test.values()))
+    estimated_effects_train_values, estimated_effects_test_values = np.array(list(estimated_effects_train.values())), np.array(list(estimated_effects_test.values()))
+    results["Catenets_train"] = calculate_metrics(gt_effects_train_values, estimated_effects_train_values)
+    results["Catenets_test"] = calculate_metrics(gt_effects_test_values, estimated_effects_test_values)
+    # Add Catenets effects
+    model_effects_train["Catenets"] = estimated_effects_train
+    model_effects_test["Catenets"] = estimated_effects_test
         
-    # print("Training Sequential Model")
-    # # Save results and CSVs
-    # results_path = f"{main_dir}/results/systematic_{args.systematic}/results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_numbert_of_modules_{args.num_modules}_combined_results_sequential.json"
+    print("Training Sequential Model")
+    # Save results and CSVs
+    results_path = f"{main_dir}/results/systematic_{args.systematic}/results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_numbert_of_modules_{args.num_modules}_combined_results_sequential.json"
     
-    # results_csv_folder = f"{results_path}/csvs_{args.num_modules}_{args.num_feature_dimensions}_scale_{args.scale}"
-    # os.makedirs(results_csv_folder, exist_ok=True)
-    # evaluate_train = True
-    # if evaluate_train:
-    #     end_to_end_train_df, end_to_end_test_df = get_end_to_end_modular_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=50, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train
-    #     )
-    #     results["End_to_End_known_cov_train"] = calculate_metrics(end_to_end_train_df["ground_truth_effect"], end_to_end_train_df["estimated_effect"])
-    #     # Save CSVs
-    #     # end_to_end_train_df.to_csv(f"{results_csv_folder}/end_to_end_combined_train_df.csv", index=False)
-    #     # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, end_to_end_train_df)
+    results_csv_folder = f"{results_path}/csvs_{args.num_modules}_{args.num_feature_dimensions}_scale_{args.scale}"
+    os.makedirs(results_csv_folder, exist_ok=True)
+    evaluate_train = True
+    if evaluate_train:
+        end_to_end_train_df, end_to_end_test_df = get_end_to_end_modular_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=50, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train
+        )
+        results["End_to_End_known_cov_train"] = calculate_metrics(end_to_end_train_df["ground_truth_effect"], end_to_end_train_df["estimated_effect"])
+        # Save CSVs
+        # end_to_end_train_df.to_csv(f"{results_csv_folder}/end_to_end_combined_train_df.csv", index=False)
+        # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, end_to_end_train_df)
         
-    # else:
-    #     end_to_end_test_df = get_end_to_end_modular_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=50, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train
-    #     )
-    # results["End_to_End_known_cov_test"] = calculate_metrics(end_to_end_test_df["ground_truth_effect"], end_to_end_test_df["estimated_effect"])
-    # # save end_to_end_test_df
-    # end_to_end_test_df.to_csv(f"{results_csv_folder}/end_to_end_known_cov_combined_test_df.csv")
+    else:
+        end_to_end_test_df = get_end_to_end_modular_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=50, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train
+        )
+    results["End_to_End_known_cov_test"] = calculate_metrics(end_to_end_test_df["ground_truth_effect"], end_to_end_test_df["estimated_effect"])
+    # save end_to_end_test_df
+    end_to_end_test_df.to_csv(f"{results_csv_folder}/end_to_end_known_cov_combined_test_df.csv")
 
-    # if evaluate_train:
-    #     end_to_end_train_df, end_to_end_test_df = get_end_to_end_modular_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=50, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True
-    #     )
-    #     results["End_to_End_unknown_cov_train"] = calculate_metrics(end_to_end_train_df["ground_truth_effect"], end_to_end_train_df["estimated_effect"])
-    #     # Save CSVs
-    #     # end_to_end_train_df.to_csv(f"{results_csv_folder}/end_to_end_combined_train_df.csv", index=False)
-    #     # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, end_to_end_train_df)
+    if evaluate_train:
+        end_to_end_train_df, end_to_end_test_df = get_end_to_end_modular_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=50, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True
+        )
+        results["End_to_End_unknown_cov_train"] = calculate_metrics(end_to_end_train_df["ground_truth_effect"], end_to_end_train_df["estimated_effect"])
+        # Save CSVs
+        # end_to_end_train_df.to_csv(f"{results_csv_folder}/end_to_end_combined_train_df.csv", index=False)
+        # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, end_to_end_train_df)
         
-    # else:
-    #     end_to_end_test_df = get_end_to_end_modular_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=50, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True
-    #     )
-    # results["End_to_End_unknown_cov_test"] = calculate_metrics(end_to_end_test_df["ground_truth_effect"], end_to_end_test_df["estimated_effect"])
+    else:
+        end_to_end_test_df = get_end_to_end_modular_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=50, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True
+        )
+    results["End_to_End_unknown_cov_test"] = calculate_metrics(end_to_end_test_df["ground_truth_effect"], end_to_end_test_df["estimated_effect"])
     # print(results)
     # end_to_end_test_df.to_csv(f"{results_csv_folder}/end_to_end_unknown_cov_combined_test_df.csv")
     
     # combined_df_test = combine_model_effects(gt_effects_test, model_effects_test, end_to_end_test_df)
     
-    # # Call the sequential model function with the access to the module wise outputs
-    # if evaluate_train:
-    #     sequential_train_df, sequential_test_df = get_sequential_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=args.epochs, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, data_dist=args.data_dist, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
-    #     )
-    #     results["Sequential_known_cov_train"] = calculate_metrics(sequential_train_df["ground_truth_effect"], sequential_train_df["estimated_effect"])
-    #     # Save CSVs
-    #     # sequential_train_df.to_csv(f"{results_csv_folder}/sequential_combined_train_df.csv", index=False)
-    #     # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, sequential_train_df)
-    #     # combined_df_train.to_csv(f"{results_csv_folder}/combined_effects_train.csv", index=False)
-    # else:
-    #     sequential_test_df = get_sequential_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=args.epochs, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, data_dist=args.data_dist, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
-    #     )
-    # results["Sequential_known_cov_test"] = calculate_metrics(sequential_test_df["ground_truth_effect"], sequential_test_df["estimated_effect"])
-    # sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_known_cov_test_df.csv")
+    # Call the sequential model function with the access to the module wise outputs
+    if evaluate_train:
+        sequential_train_df, sequential_test_df = get_sequential_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=args.epochs, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, data_dist=args.data_dist, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
+        )
+        results["Sequential_known_cov_train"] = calculate_metrics(sequential_train_df["ground_truth_effect"], sequential_train_df["estimated_effect"])
+        # Save CSVs
+        # sequential_train_df.to_csv(f"{results_csv_folder}/sequential_combined_train_df.csv", index=False)
+        # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, sequential_train_df)
+        # combined_df_train.to_csv(f"{results_csv_folder}/combined_effects_train.csv", index=False)
+    else:
+        sequential_test_df = get_sequential_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=args.epochs, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, data_dist=args.data_dist, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
+        )
+    results["Sequential_known_cov_test"] = calculate_metrics(sequential_test_df["ground_truth_effect"], sequential_test_df["estimated_effect"])
+    sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_known_cov_test_df.csv")
 
-    # # Call the sequential model function with the access to the module wise outputs
-    # if evaluate_train:
-    #     sequential_train_df, sequential_test_df = get_sequential_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=args.epochs, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
-    #     )
-    #     results["Sequential_unknown_cov_train"] = calculate_metrics(sequential_train_df["ground_truth_effect"], sequential_train_df["estimated_effect"])
-    #     # Save CSVs
-    #     # sequential_train_df.to_csv(f"{results_csv_folder}/sequential_combined_train_df.csv", index=False)
-    #     # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, sequential_train_df)
-    #     # combined_df_train.to_csv(f"{results_csv_folder}/combined_effects_train.csv", index=False)
-    # else:
-    #     sequential_test_df = get_sequential_model_effects(
-    #         csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
-    #         hidden_dim=args.hidden_dim, epochs=args.epochs, 
-    #         batch_size=args.batch_size, output_dim=args.output_dim,
-    #         underlying_model_class=args.underlying_model_class, scale=args.scale,
-    #         scaler_path=scaler_path, bias_strength=args.bias_strength,
-    #         domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
-    #     )
-    # results["Sequential_unknown_cov_test"] = calculate_metrics(sequential_test_df["ground_truth_effect"], sequential_test_df["estimated_effect"])
-    # sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_unknown_cov_test_df.csv")
-    # print(results)
+    # Call the sequential model function with the access to the module wise outputs
+    if evaluate_train:
+        sequential_train_df, sequential_test_df = get_sequential_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=args.epochs, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
+        )
+        results["Sequential_unknown_cov_train"] = calculate_metrics(sequential_train_df["ground_truth_effect"], sequential_train_df["estimated_effect"])
+        # Save CSVs
+        # sequential_train_df.to_csv(f"{results_csv_folder}/sequential_combined_train_df.csv", index=False)
+        # combined_df_train = combine_model_effects(gt_effects_train, model_effects_train, sequential_train_df)
+        # combined_df_train.to_csv(f"{results_csv_folder}/combined_effects_train.csv", index=False)
+    else:
+        sequential_test_df = get_sequential_model_effects(
+            csv_path, obs_data_path, train_qids, test_qids, T0_trees, T1_trees,
+            hidden_dim=args.hidden_dim, epochs=args.epochs, 
+            batch_size=args.batch_size, output_dim=args.output_dim,
+            underlying_model_class=args.underlying_model_class, scale=args.scale,
+            scaler_path=scaler_path, bias_strength=args.bias_strength,
+            domain=args.domain, model_misspecification=args.model_misspecification, composition_type=args.composition_type, evaluate_train=evaluate_train, train_df=train_df, test_df=test_df, covariates=module_feature_covariates, use_high_level_features=True, num_modules=args.num_modules, num_feature_dimensions=args.num_feature_dimensions
+        )
+    results["Sequential_unknown_cov_test"] = calculate_metrics(sequential_test_df["ground_truth_effect"], sequential_test_df["estimated_effect"])
+    sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_unknown_cov_test_df.csv")
+    print(results)
 
     
     
-    # # sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_test_df.csv", index=False)
+    # sequential_test_df.to_csv(f"{results_csv_folder}/sequential_combined_test_df.csv", index=False)
 
-    # # Create combined DataFrames (assuming these functions are still relevant for sequential model)
+    # Create combined DataFrames (assuming these functions are still relevant for sequential model)
     
     
 
-    # print(results)
-    # print(f"Results saved at {results_path}")
-    # print(f"CSVs saved at {results_csv_folder}")
-    # print("Done!")
+    print(results)
+    print(f"Results saved at {results_path}")
+    print(f"CSVs saved at {results_csv_folder}")
+    print("Done!")
 
     all_results[str(variable)] = results
     print(all_results)
 
     # # save all_results
-    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_all_baselines.json", "w") as f:
+    with open(f"{main_dir}/results/systematic_{args.systematic}/all_results_{args.data_dist}_{args.composition_type}_covariates_shared_{args.covariates_shared}_use_subset_features_{args.use_subset_features}_combined_results_sequential_exp_{exp}_number_of_modules_{args.num_modules}_identifiability.json", "w") as f:
         json.dump(all_results, f)
 
     # combined_df_test = combine_model_effects(gt_effects_test, model_effects_test, sequential_test_df)
