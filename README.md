@@ -37,23 +37,26 @@ sampler.create_iid_ood_split(split_type="ood",
 2. Run ```factoryScenarioGenerator.ipynb``` notebook to generate various manufacturing assembly line layouts with hierarchical structures and initial factory conditions which determine how much raw material is available and specifies the product demand. 
 - Running this notebook will generate ```factory_scenario``` folder and ```initial_conditions``` folder. 
 3. The number of workers and their skill distribution is specified in ```workers/workers_00.json``` and ```workers/workers_01.json``` folder. This specifies the binary treatment for hierarchical assembly layouts (units). 
-3. Run ```simulate_factories-time-dynamicsipynb``` notebook which uses simpy (an event simulator) to generate potential outcomes for different treatments. It takes a factory scenario (hierarchical structure representing instance-specofic composition) as an input, runs it with a set of factory workers with multiple skill levels to calculate total rework, scrap and products produced by each station and the whole factory (component-level and unit-level potential ouctomes.)
+3. Run ```simulate_factories-time-dynamics.ipynb``` notebook which uses simpy (an event simulator) to generate potential outcomes for different treatments. It takes a factory scenario (hierarchical structure representing instance-specific composition) as an input, runs it with a set of factory workers with multiple skill levels to calculate total rework, scrap and products produced by each station and the whole factory (component-level and unit-level potential ouctomes.)
 
 ## Experiment results 
 In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce experiment results. 
 ### Synthetic data
 - cd ```synthetic_data```
 
-- Run ```./base_experiments.sh``` in ```synthetic_data/``` folder to generate results for compositional generalization experiment for sequential and parallel compositional structures. This will generate ```results/``` folder in ```synthetic_data/``` with json files consisting of $R^2$ and PEHE metrics for CATE estimation task.
+- Run ```./base_experiments.sh``` in ```synthetic_data/``` folder to generate results for compositional generalization experiment for sequential and parallel compositional structures. This will generate ```results/``` folder in ```synthetic_data/``` with json files consisting of $R^2$ and ```PEHE``` metrics for CATE estimation task.
 
 - Use ```notebooks/plot_results.ipynb``` to reproduce the results of Figure 3. 
 
 ### Manufacturing domain
 
-#### Unitary model training
+#### Unitary model training and evaluation
 - Run ```manufacturing_assembly/highLevelModelTraining.ipynb``` for CATE estimation using unitary models. 
 
+#### Compositional model training and evaluation
+- First, run ```manufacturing_assembly/LowLevelModels.ipynb``` to train component-level models for potential outcomes estimation. 
 
+- Then, run ```manufacturing_assembly/LowLevelModels-aggregation.ipynb``` to aggregate the component-level estimates to obtain unit-level estimate using compositional approach. 
 
 ### Query execution domain 
 
