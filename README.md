@@ -32,6 +32,13 @@ sampler.create_iid_ood_split(split_type="ood",
                             num_train_modules=train_modules, test_on_last_depth=True)
 ```
 
+### Manufacturing assembly data generation
+1. cd ```manufacturing_assembly``` 
+2. Run ```factoryScenarioGenerator.ipynb``` notebook to generate various manufacturing assembly line layouts with hierarchical structures and initial factory conditions which determine how much raw material is available and specifies the product demand. 
+- Running this notebook will generate ```factory_scenario``` folder and ```initial_conditions``` folder. 
+3. The number of workers and their skill distribution is specified in ```workers/workers_00.json``` and ```workers/workers_01.json``` folder. This specifies the binary treatment for hierarchical assembly layouts (units). 
+3. Run ```simulate_factories-time-dynamicsipynb``` notebook which uses simpy (an event simulator) to generate potential outcomes for different treatments. It takes a factory scenario (hierarchical structure representing instance-specofic composition) as an input, runs it with a set of factory workers with multiple skill levels to calculate total rework, scrap and products produced by each station and the whole factory (component-level and unit-level potential ouctomes.)
+
 ## Experiment results 
 In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce experiment results. 
 ### Synthetic data
@@ -42,6 +49,11 @@ In order to reproduce experiment results, currently we have separate codebase fo
 - Use ```notebooks/plot_results.ipynb``` to reproduce the results of Figure 3. 
 
 ### Manufacturing domain
+
+#### Unitary model training
+- Run ```manufacturing_assembly/highLevelModelTraining.ipynb``` for CATE estimation using unitary models. 
+
+
 
 ### Query execution domain 
 

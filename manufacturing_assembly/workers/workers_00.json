@@ -1,0 +1,20 @@
+{
+  "workers": [
+    {
+      "skill": 0.99
+    },
+    {
+      "skill": 0.93
+    },
+    {
+      "skill": 0.87
+    },
+    {
+      "skill": 0.92
+    },
+    {
+      "skill": 0.88
+    }
+  ],
+  "distribution": 0
+}
