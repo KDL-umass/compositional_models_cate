@@ -9,34 +9,36 @@ We generate synthetic compositional data with various characteristics -- composi
 
 **Usage:**
 To generate synthetic data, use the below code (with root_dir synthetic_data/).
-```
+```python
 from data_generator.synthetic_data_sampler import SyntheticDataSampler
 num_modules = 10
 module_function_types = ["polyval"] * num_modules
 
 # simulate data for both treatments (experimental data )
-sampler = SyntheticDataSampler(num_modules = num_modules, 
-                                    num_feature_dimensions = 1, 
-                                    composition_type = "sequential", 
-                                    fixed_structure = False, 
-                                    max_depth=num_modules, 
-                                    num_samples=1000, 
-                                    seed=42, 
-                                    data_dist = "uniform", module_function_types=module_function_types, resample=False)
+sampler = SyntheticDataSampler( num_modules = num_modules, 
+                                num_feature_dimensions = 1, 
+                                composition_type = "sequential", 
+                                fixed_structure = False, 
+                                max_depth=num_modules, 
+                                num_samples=1000, 
+                                seed=42, 
+                                data_dist = "uniform", module_function_types=module_function_types, resample=False)
 
 # create observational data by introducing observational bias
-sampler.create_observational_data(biasing_covariate="feature_sum", bias_strength=1)
+sampler.create_observational_data(biasing_covariate="feature_sum",      bias_strength=1)
 
 # split units into train/test systematically (IID: Random split, OOD: split on varying tree-depths) and indicate if models are evaluated on the maximum tree-depth (for OOD split)
-sampler.create_iid_ood_split(split_type="ood", num_train_modules=train_modules, test_on_last_depth=True)
+sampler.create_iid_ood_split(split_type="ood", 
+                            num_train_modules=train_modules, test_on_last_depth=True)
 ```
 
 ## Experiment Results 
 In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce experiment results. 
 ### Synthetic data
-Run ./base_experiments.sh in synthetic_data/ folder to generate results for compositional generalization experiment. 
+cd ```synthetic_data```
+Run ```./base_experiments.sh``` in ```synthetic_data/``` folder to generate results for compositional generalization experiment for sequential and parallel compositional structures. This will generate ```results/``` folder in ```synthetic_data/``` with json files consisting of $R^2$ and PEHE metrics for CATE estimation task.
 
-Use notebooks/plot_results.ipynb to reproduce results of Figure 3. 
+Use ```notebooks/plot_results.ipynb``` to reproduce the results of Figure 3. 
 
 ### Manufacturing domain
 
