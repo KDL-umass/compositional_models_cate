@@ -39,6 +39,10 @@ sampler.create_iid_ood_split(split_type="ood",
 3. The number of workers and their skill distribution is specified in ```workers/workers_00.json``` and ```workers/workers_01.json``` folder. This specifies the binary treatment for hierarchical assembly layouts (units). 
 3. Run ```simulate_factories-time-dynamics.ipynb``` notebook which uses simpy (an event simulator) to generate potential outcomes for different treatments. It takes a factory scenario (hierarchical structure representing instance-specific composition) as an input, runs it with a set of factory workers with multiple skill levels to calculate total rework, scrap and products produced by each station and the whole factory (component-level and unit-level potential ouctomes.)
 
+### Matrix operations processing
+- Run ```matrix_operations/generate_matrix_expressions_data.py``` to evaluate a set of matrix operations on a given computer hardware. 
+- Already evaluated expression data on two different computer hardware is provided in the [Google Drive](https://drive.google.com/drive/u/0/folders/18PUpCkzSOYeLPfQNEqgpZ6M1rtCtoVLI).  
+
 ## Experiment results 
 In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce experiment results. 
 ### Synthetic data
@@ -58,8 +62,10 @@ In order to reproduce experiment results, currently we have separate codebase fo
 
 - Then, run ```manufacturing_assembly/LowLevelModels-aggregation.ipynb``` to aggregate the component-level estimates to obtain unit-level estimate using compositional approach. 
 
+### Matrix operations processing
+
 ### Query execution domain 
 
-### Matrix operations processing
+
 
 
