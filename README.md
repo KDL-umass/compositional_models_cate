@@ -43,7 +43,6 @@ sampler.create_iid_ood_split(split_type="ood",
 - Run ```matrix_operations/generate_matrix_expressions_data.py``` to generate data for a set of matrix expressions (units) on a given computer hardware (treatment), and obtain the run-times (potential outcomes) for each operation (component) as well as the overall expression. 
 - Already generated expression data on two different computer hardware is provided in the JSONs and CSVs formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1Z6tOgRAP3LNkC1hLJI3nbgGWn98YFSt-).  
 
-- **Note:** To generate the matrix operations data set, each matrix operation is evaluated independently of other operations, and overall run-time of the expression is the sum of the run-times of the individual operations, thus this data set satisfy additive parallel compositional assumption. Hence, we use additive parallel compositional model for this data set as explained below. 
 
 ## Experiment results 
 In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce experiment results. 
@@ -65,6 +64,7 @@ In order to reproduce experiment results, currently we have separate codebase fo
 - Then, run ```manufacturing_assembly/LowLevelModels-aggregation.ipynb``` to aggregate the component-level estimates to obtain unit-level CATE estimate using the compositional approach. 
 
 ### Matrix operations processing
+**Note:** To generate the matrix operations data set, each matrix operation is evaluated independently of other operations, and overall run-time of the expression is the sum of the run-times of the individual operations, thus this data set satisfies the additive parallel compositional assumption. Hence, we use the additive parallel compositional model for this data set as explained below. 
 - First, make sure that ```matrix_operations/data/csvs``` contain the CSV files for the components and units (```maths_evaluation_datahigh_levelfeatures.csv```), consisting of covariates, treatment and outcomes (run-time) for both the treatments. Download the prepared data from [Google Drive Link](https://drive.google.com/drive/u/0/folders/1tJrB_i5Us8YA0JxHAIskV5f8H-yhnX-0)
 
 - Run ```matrix_operations/run_math_evaluation_baselines.py``` to run the standard CATE baselines (unitary approach) on experimental (bias_strength = 0) and observational (bias_strength = 1 - 20) data. 
