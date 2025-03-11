@@ -1,5 +1,5 @@
 # Compositional Models for Estimating Causal Effects
-Repository providing benchmarks and code to reproduce experiments of CLeaR 25 paper: [Compositional Models for Estimating Causal Effects](https://arxiv.org/abs/2406.17714), to appear in Causal Learning and Reasoning Conference, 2025. 
+Repository providing benchmarks and code to reproduce experiments of CLeaR'25 paper: [Compositional Models for Estimating Causal Effects](https://arxiv.org/abs/2406.17714), to appear in Causal Learning and Reasoning Conference, 2025. 
 
 **Summary:** We introduce a novel compositional framework to estimate conditional average treatment effects (CATE) for compositional systems with structured units. We introduce three novel and realistic evaluation environments to evaluate compositional approaches for causal effect estimation — (1) query execution in relational databases, (2) matrix processing on different types of computer hardware, and (3) simulated manufacturing assembly line data based on a realistic simulator. We provide data and code to generate data from the three benchmarks and synthetic data used in the paper. We find that the compositional approach provides accurate causal effect estimation for structured units, increased sample efficiency, improved overlap between treatment and control groups, and compositional generalization to units with unseen combinations of components.
 
@@ -45,7 +45,7 @@ sampler.create_iid_ood_split(split_type="ood",
 
 
 ## Experiment results 
-In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce experiment results. 
+In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce the results. 
 ### Synthetic data
 - cd ```synthetic_data```.
 
@@ -65,7 +65,7 @@ In order to reproduce experiment results, currently we have separate codebase fo
 
 ### Matrix operations processing
 **Note:** To generate the matrix operations data set, each matrix operation is evaluated independently of other operations, and overall run-time of the expression is the sum of the run-times of the individual operations, thus this data set satisfies the additive parallel compositional assumption. Hence, we use the additive parallel compositional model for this data set as explained below. 
-- First, make sure that ```matrix_operations/data/csvs``` contain the CSV files for the components and units (```maths_evaluation_datahigh_levelfeatures.csv```), consisting of covariates, treatment and outcomes (run-time) for both the treatments. Download the prepared data from [Google Drive Link](https://drive.google.com/drive/u/0/folders/1tJrB_i5Us8YA0JxHAIskV5f8H-yhnX-0)
+- First, make sure that ```matrix_operations/data/csvs``` contain the CSV files for the components and units (```maths_evaluation_datahigh_levelfeatures.csv```), consisting of covariates, treatment and outcomes (run-time) for both the treatments. Download the prepared data from [Google Drive Link](https://drive.google.com/drive/u/0/folders/1tJrB_i5Us8YA0JxHAIskV5f8H-yhnX-0).
 
 - Run ```matrix_operations/run_math_evaluation_baselines.py``` to run the standard CATE baselines (unitary approach) on experimental (bias_strength = 0) and observational (bias_strength = 1 - 20) data. 
 
