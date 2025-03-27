@@ -34,22 +34,25 @@ sampler.create_iid_ood_split(split_type="ood",
 
 ### Manufacturing assembly data generation
 1. cd ```manufacturing_assembly``` 
-2. Run ```factoryScenarioGenerator.ipynb``` notebook to generate various manufacturing assembly line layouts with hierarchical structures and initial factory conditions which determine how much raw material is available and specifies the product demand. 
+2. Run the `factoryScenarioGenerator.ipynb``` notebook to generate various manufacturing assembly line layouts with hierarchical structures and initial factory conditions, which determine how much raw material is available and specify the product demand. 
 - Running this notebook will generate ```factory_scenario``` folder and ```initial_conditions``` folder. 
-3. The number of workers and their skill distribution is specified in ```workers/workers_00.json``` and ```workers/workers_01.json``` folder. This specifies the binary treatment for hierarchical assembly layouts (units). 
-3. Run ```simulate_factories-time-dynamics.ipynb``` notebook which uses simpy (an event simulator) to generate potential outcomes for different treatments. It takes a factory scenario (hierarchical structure representing instance-specific composition) as an input, runs it with a set of factory workers with multiple skill levels to calculate total rework, scrap and products produced by each station and the whole factory (component-level and unit-level potential ouctomes.)
+3. The number of workers and their skill distribution is specified in the ```workers/workers_00.json``` and ```workers/workers_01.json```folders. This specifies the binary treatment for hierarchical assembly layouts (units). 
+3. Run the ```simulate_factories-time-dynamics.ipynb``` notebook, which uses simpy (an event simulator) to generate potential outcomes for different treatments. It takes a factory scenario (hierarchical structure representing instance-specific composition) as an input, runs it with a set of factory workers with multiple skill levels to calculate total rework, scrap, and products produced by each station and the whole factory (component-level and unit-level potential outcomes.)
 
 ### Matrix operations processing
 - Run ```matrix_operations/generate_matrix_expressions_data.py``` to generate data for a set of matrix expressions (units) on a given computer hardware (treatment), and obtain the run-times (potential outcomes) for each operation (component) as well as the overall expression. 
-- Already generated expression data on two different computer hardware is provided in the JSONs and CSVs formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1Z6tOgRAP3LNkC1hLJI3nbgGWn98YFSt-).  
+- Expression data generated on two different computer hardware is provided in the JSON and CSV formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1Z6tOgRAP3LNkC1hLJI3nbgGWn98YFSt-).  
 
+### Query Execution Domain
+- TODO: Add code to generate data from scratch using Postgres.
+- Query execution data generated for around 10k query plans (units) with various database configuration parameters (interventions) is provided in the JSONs and CSVs formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1uT67dyDWVKXPatueVOug2V4gZSgaie1Z).  
 
 ## Experiment results 
-In order to reproduce experiment results, currently we have separate codebase for each domain. Run the code in the respective folder to reproduce the results. 
+In order to reproduce experiment results, we currently have a separate codebase for each domain. Run the code in the respective folder to reproduce the results. 
 ### Synthetic data
 - cd ```synthetic_data```.
 
-- Run ```./base_experiments.sh``` in ```synthetic_data/``` folder to generate results for compositional generalization experiment for sequential and parallel compositional structures. This will generate ```results/``` folder in ```synthetic_data/``` with json files consisting of $R^2$ and ```PEHE``` metrics for CATE estimation task.
+- Run ```./base_experiments.sh``` in ```synthetic_data/``` folder to generate results for compositional generalization experiment for sequential and parallel compositional structures. This will generate a ```results/``` folder in ```synthetic_data/``` with JSON files consisting of $R^2$ and ```PEHE``` metrics for the CATE estimation task.
 
 - Use ```notebooks/plot_results.ipynb``` to reproduce the results of Figure 3. 
 
@@ -64,7 +67,7 @@ In order to reproduce experiment results, currently we have separate codebase fo
 - Then, run ```manufacturing_assembly/LowLevelModels-aggregation.ipynb``` to aggregate the component-level estimates to obtain unit-level CATE estimate using the compositional approach. 
 
 ### Matrix operations processing
-**Note:** To generate the matrix operations data set, each matrix operation is evaluated independently of other operations, and overall run-time of the expression is the sum of the run-times of the individual operations, thus this data set satisfies the additive parallel compositional assumption. Hence, we use the additive parallel compositional model for this data set as explained below. 
+**Note:** To generate the matrix operations data set, each matrix operation is evaluated independently of other operations, and the overall run-time of the expression is the sum of the run-times of the individual operations; thus, this data set satisfies the additive parallel compositional assumption. Hence, we use the additive parallel compositional model for this data set as explained below. 
 - First, make sure that ```matrix_operations/data/csvs``` contain the CSV files for the components and units (```maths_evaluation_datahigh_levelfeatures.csv```), consisting of covariates, treatment and outcomes (run-time) for both the treatments. Download the prepared data from [Google Drive Link](https://drive.google.com/drive/u/0/folders/1tJrB_i5Us8YA0JxHAIskV5f8H-yhnX-0).
 
 - Run ```matrix_operations/run_math_evaluation_baselines.py``` to run the standard CATE baselines (unitary approach) on experimental (bias_strength = 0) and observational (bias_strength = 1 - 20) data. 
