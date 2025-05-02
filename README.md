@@ -74,7 +74,16 @@ In order to reproduce experiment results, we currently have a separate codebase 
 
 - Run ```matrix_operations/run_parallel_additive_model_maths_baseline.py``` to run the additive parallel compositional model. 
 
-### Query execution domain 
+If you find our work helpful, please consider citing:
+
+```python
+@article{pruthi2024compositional,
+  title={Compositional Models for Estimating Causal Effects},
+  author={Pruthi, Purva and Jensen, David},
+  journal={arXiv preprint arXiv:2406.17714},
+  year={2024}
+}
+```
 
 
 
