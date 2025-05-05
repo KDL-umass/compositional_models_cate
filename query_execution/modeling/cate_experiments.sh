@@ -1,0 +1,1 @@
+python3 causal_effect_estimation.py --data_folder_name data_v1 --treatment_ids 0 6 --sampling observational --num_trials 1 --biasing_covariate total_input_rows --model_type random_forest
