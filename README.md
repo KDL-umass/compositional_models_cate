@@ -44,8 +44,8 @@ sampler.create_iid_ood_split(split_type="ood",
 - Expression data generated on two different computer hardware is provided in the JSON and CSV formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1Z6tOgRAP3LNkC1hLJI3nbgGWn98YFSt-).  
 
 ### Query Execution Domain
-- TODO: Add code to generate data from scratch using Postgres.
-- Query execution data generated for around 10k query plans (units) with various database configuration parameters (interventions) is provided in the JSONs and CSVs formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1uT67dyDWVKXPatueVOug2V4gZSgaie1Z).  
+- Run ```query_execution/data_gen/end_to_end_data_gen.sh``` to generate data from scratch. Note: You would need to setup Stackoverflow database and pull user-generated queries for data generation from scractch. 
+- Query execution data generated for around 10k query execution plans (units) with various database configuration parameters (interventions) is provided in the JSONs and CSVs formats here:  [Google Drive Link](https://drive.google.com/drive/u/0/folders/1uT67dyDWVKXPatueVOug2V4gZSgaie1Z).  
 
 ## Experiment results 
 In order to reproduce experiment results, we currently have a separate codebase for each domain. Run the code in the respective folder to reproduce the results. 
@@ -73,6 +73,9 @@ In order to reproduce experiment results, we currently have a separate codebase 
 - Run ```matrix_operations/run_math_evaluation_baselines.py``` to run the standard CATE baselines (unitary approach) on experimental (bias_strength = 0) and observational (bias_strength = 1 - 20) data. 
 
 - Run ```matrix_operations/run_parallel_additive_model_maths_baseline.py``` to run the additive parallel compositional model. 
+
+### Query Execution
+- Run ```query_execution/modeling/causal_effect_estimation.py``` to run the additive parallel compositional model on query execution data set.
 
 If you find our work helpful, please consider citing:
 
